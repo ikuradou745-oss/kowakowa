@@ -115,7 +115,7 @@ let firstPersonFlashlightMesh;
 let blackMonsterGroup, redMonsterGroup, blueMonsterGroup, purpleMonsterGroup;
 
 // Shared Textures (generated once for max performance)
-let woodFloorTexture, woodWallTexture, blackboardTexture;
+let woodFloorTexture, woodWallTexture, blackboardTexture, gymFloorTexture, noticeBoardTexture, shoeLockerTexture;
 
 // Controls
 const keys = { w: false, a: false, s: false, d: false, shift: false };
@@ -164,17 +164,17 @@ function createWoodFloorTexture() {
   canvas.height = 256;
   const ctx = canvas.getContext('2d');
 
-  // Dark weathered cedar/oak floorboards
-  ctx.fillStyle = '#2d1e12';
+  // Weathered Japanese cedar/oak floorboards (brightened for clear visibility)
+  ctx.fillStyle = '#4e3a29';
   ctx.fillRect(0, 0, 256, 256);
 
   // Planks
   const plankH = 32;
   for (let y = 0; y < 256; y += plankH) {
-    ctx.fillStyle = (y % (plankH * 2) === 0) ? '#382618' : '#302014';
+    ctx.fillStyle = (y % (plankH * 2) === 0) ? '#5c4532' : '#523e2c';
     ctx.fillRect(0, y, 256, plankH - 2);
 
-    ctx.strokeStyle = '#180f08';
+    ctx.strokeStyle = '#2b1f15';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(0, y + plankH - 1);
@@ -183,7 +183,7 @@ function createWoodFloorTexture() {
 
     // Wood grain lines
     for (let x = 0; x < 256; x += 18) {
-      ctx.fillStyle = 'rgba(10, 6, 3, 0.15)';
+      ctx.fillStyle = 'rgba(20, 14, 8, 0.12)';
       ctx.fillRect(x + (y % 16), y, 8, plankH - 2);
     }
   }
@@ -200,22 +200,22 @@ function createWoodWallTexture() {
   canvas.height = 256;
   const ctx = canvas.getContext('2d');
 
-  // Old wooden school classroom wall / sliding door partition
-  ctx.fillStyle = '#483524';
+  // Old wooden school classroom wall / sliding door partition (clearly visible wood tones)
+  ctx.fillStyle = '#6b523b';
   ctx.fillRect(0, 0, 256, 256);
 
   // Vertical wood paneling
   for (let x = 0; x < 256; x += 24) {
-    ctx.fillStyle = (x % 48 === 0) ? '#543e2b' : '#453221';
+    ctx.fillStyle = (x % 48 === 0) ? '#785d43' : '#664e38';
     ctx.fillRect(x, 0, 22, 256);
 
-    ctx.strokeStyle = '#24180d';
+    ctx.strokeStyle = '#38281b';
     ctx.lineWidth = 2;
     ctx.strokeRect(x, 0, 24, 256);
   }
 
   // Cross beam
-  ctx.fillStyle = '#362415';
+  ctx.fillStyle = '#4c3624';
   ctx.fillRect(0, 120, 256, 16);
   ctx.fillRect(0, 235, 256, 21);
 
@@ -245,6 +245,108 @@ function createBlackboardTexture() {
   ctx.font = 'bold 18px sans-serif';
   ctx.fillText('第　時　限', 25, 45);
   ctx.fillText('〜 脱出せよ 〜', 25, 80);
+
+  return new THREE.CanvasTexture(canvas);
+}
+
+function createGymFloorTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+
+  // Hardwood gym court floor
+  ctx.fillStyle = '#b8864a';
+  ctx.fillRect(0, 0, 256, 256);
+
+  // Planks
+  for (let y = 0; y < 256; y += 16) {
+    ctx.fillStyle = (y % 32 === 0) ? '#c49354' : '#b27f42';
+    ctx.fillRect(0, y, 256, 15);
+  }
+
+  // White court lines
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(128, 128, 64, 0, Math.PI * 2);
+  ctx.moveTo(0, 128);
+  ctx.lineTo(256, 128);
+  ctx.stroke();
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  return texture;
+}
+
+function createNoticeBoardTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+
+  // Corkboard base
+  ctx.fillStyle = '#8f683a';
+  ctx.fillRect(0, 0, 256, 128);
+
+  // Wood frame
+  ctx.strokeStyle = '#4a3018';
+  ctx.lineWidth = 6;
+  ctx.strokeRect(3, 3, 250, 122);
+
+  // School announcements / Calligraphy posters (習字)
+  ctx.fillStyle = '#f8f4e8';
+  ctx.fillRect(16, 16, 60, 96);
+  ctx.fillRect(92, 16, 70, 96);
+  ctx.fillRect(178, 16, 62, 96);
+
+  ctx.fillStyle = '#111111';
+  ctx.font = 'bold 22px serif';
+  ctx.fillText('希望', 26, 64);
+  ctx.fillText('前進', 104, 64);
+  ctx.font = 'bold 12px sans-serif';
+  ctx.fillStyle = '#c0392b';
+  ctx.fillText('【緊急連絡】', 182, 38);
+  ctx.fillStyle = '#222';
+  ctx.fillText('日没後退去', 182, 60);
+
+  return new THREE.CanvasTexture(canvas);
+}
+
+function createShoeLockerTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+
+  // Japanese wooden getabako (shoe cubby rack)
+  ctx.fillStyle = '#5c432d';
+  ctx.fillRect(0, 0, 256, 256);
+
+  // Grid of cubbies
+  ctx.strokeStyle = '#2b1c10';
+  ctx.lineWidth = 4;
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      const x = c * 64;
+      const y = r * 64;
+      ctx.strokeRect(x, y, 64, 64);
+
+      // Dark interior
+      ctx.fillStyle = '#1e140d';
+      ctx.fillRect(x + 6, y + 6, 52, 52);
+
+      // Slippers / Uwabaki inside
+      ctx.fillStyle = '#e8e8e8';
+      ctx.fillRect(x + 14, y + 36, 16, 12);
+      ctx.fillRect(x + 34, y + 36, 16, 12);
+      // Red toe band
+      ctx.fillStyle = '#c0392b';
+      ctx.fillRect(x + 14, y + 36, 16, 4);
+      ctx.fillRect(x + 34, y + 36, 16, 4);
+    }
+  }
 
   return new THREE.CanvasTexture(canvas);
 }
@@ -280,8 +382,10 @@ window.addEventListener('DOMContentLoaded', () => {
 function initThree() {
   const container = document.getElementById('canvasContainer');
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0c0906);
-  scene.fog = new THREE.FogExp2(0x0c0906, 0.035);
+  // Atmospheric dim midnight blue background
+  scene.background = new THREE.Color(0x181c25);
+  // Soft linear fog that starts well ahead (18m) so near/medium range is 100% clear and visible
+  scene.fog = new THREE.Fog(0x181c25, 18, 55);
 
   camera = new THREE.PerspectiveCamera(74, window.innerWidth / window.innerHeight, 0.1, 90);
   camera.rotation.order = 'YXZ';
@@ -294,17 +398,22 @@ function initThree() {
   renderer.shadowMap.enabled = false; // Disabled for buttery 60 FPS
   container.appendChild(renderer.domElement);
 
-  // Ambient night school light
-  ambientLight = new THREE.AmbientLight(0x40362c, 0.9);
+  // Ambient night school light - soft, clearly visible (not pitch black!)
+  ambientLight = new THREE.AmbientLight(0x8a8276, 1.35);
   scene.add(ambientLight);
 
-  // Weak cold moonlight through windows
-  schoolMoonLight = new THREE.DirectionalLight(0x3a506b, 0.4);
+  // Soft cold moonlight through school windows
+  schoolMoonLight = new THREE.DirectionalLight(0x8ea2be, 0.95);
   schoolMoonLight.position.set(20, 30, 10);
   scene.add(schoolMoonLight);
 
-  // Player Flashlight attached to camera
-  flashlightLight = new THREE.SpotLight(0xffeed6, 3.6, 38, Math.PI / 5.2, 0.35, 1.2);
+  // Warm fill light for corridors
+  const schoolFillLight = new THREE.DirectionalLight(0x807060, 0.55);
+  schoolFillLight.position.set(-20, 25, -15);
+  scene.add(schoolFillLight);
+
+  // Player Flashlight: Wide beam, clear and bright illumination
+  flashlightLight = new THREE.SpotLight(0xfffaec, 4.2, 45, Math.PI / 3.8, 0.25, 1.0);
   flashlightLight.position.set(0, 0, 0);
   flashlightLight.target = new THREE.Object3D();
   scene.add(flashlightLight.target);
@@ -315,6 +424,9 @@ function initThree() {
   woodFloorTexture = createWoodFloorTexture();
   woodWallTexture = createWoodWallTexture();
   blackboardTexture = createBlackboardTexture();
+  gymFloorTexture = createGymFloorTexture();
+  noticeBoardTexture = createNoticeBoardTexture();
+  shoeLockerTexture = createShoeLockerTexture();
 
   window.addEventListener('resize', onWindowResize);
 }
@@ -362,92 +474,91 @@ const CELL_SIZE = 4.0;
 const WALL_HEIGHT = 3.5;
 
 // Layout definitions for Stages 1 to 5
-// 0: Floor, 1: Wood Wall, 2: Infirmary Bed/Locker (Hiding spot), 3: Exit Door/Stairs, 4: Spawn
+// 0: Floor/Corridor, 1: Wood Wall, 2: Hiding spot (Bed/Locker), 3: Exit Stairs/Gate, 4: Player Spawn
+// 10: Student Desk/Chair, 11: Teacher Podium & Chalkboard, 12: Shoe Locker, 13: Notice Board & Extinguisher
+// 14: Science Lab Bench, 15: Anatomy Skeleton, 16: Music Grand Piano, 17: Library Bookshelves, 18: Gym Equipment
 const STAGE_MAZES = [
-  // Stage 1: 12x12
+  // Stage 1: 1階 普通教室棟・保健室・昇降口 (14x14)
   [
-    [1,1,1,1,1,1,1,1,1,1,1,1],
-    [1,4,0,0,1,0,0,0,2,0,0,1],
-    [1,0,1,0,1,0,1,1,1,1,0,1],
-    [1,0,1,0,0,0,0,0,0,1,0,1],
-    [1,0,1,1,1,1,1,1,0,1,0,1],
-    [1,2,0,0,0,1,0,0,0,0,0,1],
-    [1,1,1,1,0,1,0,1,1,1,1,1],
-    [1,0,0,1,0,0,0,1,2,0,0,1],
-    [1,0,0,1,1,1,0,1,0,1,0,1],
-    [1,0,1,1,0,0,0,0,0,1,0,1],
-    [1,0,0,0,0,1,1,1,0,0,3,1],
-    [1,1,1,1,1,1,1,1,1,1,1,1]
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [1,11, 0, 0, 1,11, 0, 0, 1, 2, 0, 2, 1, 1],
+    [1, 4,10,10, 1, 0,10,10, 1, 0, 0, 0, 1, 1],
+    [1, 0,10,10, 0, 0,10,10, 0, 0, 2, 0, 1, 1],
+    [1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1,13, 0,12, 0,13, 0,12, 0,13, 0,12, 0, 1],
+    [1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1],
+    [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1],
+    [1,10,10, 0, 1,10,10, 0, 1, 0, 2, 0, 1, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1,12,12, 0, 0, 0,12,12, 0, 0, 0, 0, 3, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
   ],
-  // Stage 2: 13x13
+  // Stage 2: 2階 理科実験室・標本室・準備室 (14x14)
   [
-    [1,1,1,1,1,1,1,1,1,1,1,1,1],
-    [1,4,0,1,0,0,0,0,1,2,0,0,1],
-    [1,0,0,1,0,1,1,0,1,1,1,0,1],
-    [1,0,1,1,0,1,2,0,0,0,1,0,1],
-    [1,0,0,0,0,1,1,1,1,0,1,0,1],
-    [1,1,1,1,0,0,0,0,1,0,0,0,1],
-    [1,2,0,1,1,1,1,0,1,1,1,0,1],
-    [1,0,0,0,0,0,1,0,0,0,1,0,1],
-    [1,0,1,1,1,0,1,1,1,0,1,0,1],
-    [1,0,1,2,1,0,0,0,1,0,0,0,1],
-    [1,0,1,0,1,1,1,0,1,1,1,0,1],
-    [1,0,0,0,0,0,1,0,0,0,0,3,1],
-    [1,1,1,1,1,1,1,1,1,1,1,1,1]
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [1,11, 0, 0, 1,14, 0,14, 1,14, 0,14, 1, 1],
+    [1, 4,10, 0, 1, 0,15, 0, 1, 0, 0, 0, 1, 1],
+    [1, 0,10, 0, 0,14, 0,14, 0,14, 0,14, 1, 1],
+    [1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1,13, 0,12, 0,13, 0, 2, 0,13, 0,12, 0, 1],
+    [1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1],
+    [1, 2, 0, 2, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1],
+    [1, 0, 0, 0, 1,14, 0,14, 1, 0, 2, 0, 1, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 3, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
   ],
-  // Stage 3: 14x14
+  // Stage 3: 3階 音楽室・美術室棟 (15x15)
   [
-    [1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-    [1,4,0,0,0,1,0,0,0,1,2,0,0,1],
-    [1,0,1,1,0,1,0,1,0,1,1,1,0,1],
-    [1,0,1,2,0,0,0,1,0,0,0,1,0,1],
-    [1,0,1,1,1,1,0,1,1,1,0,1,0,1],
-    [1,0,0,0,0,1,0,0,0,1,0,0,0,1],
-    [1,1,1,1,0,1,1,1,0,1,1,1,0,1],
-    [1,2,0,1,0,0,0,1,0,0,0,1,0,1],
-    [1,0,0,1,1,1,0,1,1,1,0,1,0,1],
-    [1,0,1,1,0,0,0,0,0,1,0,0,0,1],
-    [1,0,0,1,0,1,1,1,0,1,1,1,2,1],
-    [1,1,0,1,0,1,2,1,0,0,0,1,0,1],
-    [1,0,0,0,0,1,0,0,0,1,0,0,3,1],
-    [1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [1,11, 0, 0, 1,16, 0, 0, 0, 1, 0, 0, 0, 2, 1],
+    [1, 4,10, 0, 1, 0, 0,10,10, 1, 0,10,10, 0, 1],
+    [1, 0,10, 0, 0, 0, 0,10,10, 0, 0,10,10, 0, 1],
+    [1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1,13, 0,12, 0,13, 0, 2, 0,13, 0,12, 0,13, 1],
+    [1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1],
+    [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 1],
+    [1,10, 0,10, 1,10, 0,10, 1, 0, 2, 0, 1, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 2, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 3, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
   ],
-  // Stage 4: 15x15
+  // Stage 4: 別館 図書室迷路・旧校長室 (15x15)
   [
-    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-    [1,4,0,0,1,0,0,0,1,2,0,0,0,0,1],
-    [1,0,1,0,1,0,1,0,1,1,1,1,1,0,1],
-    [1,0,1,0,0,0,1,0,0,0,0,0,1,0,1],
-    [1,0,1,1,1,1,1,1,1,1,0,0,1,0,1],
-    [1,2,0,0,0,0,0,0,0,1,0,1,1,0,1],
-    [1,1,1,1,1,0,1,1,0,1,0,0,1,0,1],
-    [1,0,0,0,1,0,1,2,0,1,1,0,1,0,1],
-    [1,0,1,0,1,0,1,1,0,0,0,0,0,0,1],
-    [1,0,1,0,0,0,0,1,1,1,0,1,1,0,1],
-    [1,0,1,1,1,1,0,0,0,1,0,0,1,0,1],
-    [1,0,0,0,0,1,1,1,0,1,1,0,1,2,1],
-    [1,1,1,1,0,0,0,1,0,0,1,0,1,0,1],
-    [1,2,0,1,1,1,0,0,0,0,1,0,0,3,1],
-    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [1, 4, 0, 0, 1,17, 0,17, 0,17, 1, 0, 0, 2, 1],
+    [1, 0,17, 0, 1, 0, 0, 0, 0, 0, 1, 0, 2, 0, 1],
+    [1, 0,17, 0, 0,17, 0,17, 0,17, 0, 0, 0, 0, 1],
+    [1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1,13, 0,12, 0,13, 0, 2, 0,13, 0,12, 0,13, 1],
+    [1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1],
+    [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 1],
+    [1,10, 0,10, 1,17, 0,17, 1, 0, 2, 0, 1, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 2, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 3, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
   ],
-  // Stage 5: 16x16 (Final escape)
+  // Stage 5: 最深部 体育館・大講堂・大脱出ゲート (16x16)
   [
-    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-    [1,4,0,0,1,0,0,0,1,0,0,0,0,2,0,1],
-    [1,0,1,0,1,0,1,0,1,0,1,1,1,1,0,1],
-    [1,0,1,0,0,0,1,0,0,0,1,0,0,0,0,1],
-    [1,0,1,1,1,0,1,1,1,1,1,0,1,1,0,1],
-    [1,2,0,0,1,0,0,0,0,0,1,0,0,1,0,1],
-    [1,1,1,0,1,1,1,1,1,0,1,1,0,1,0,1],
-    [1,0,0,0,0,0,0,2,1,0,0,1,0,1,0,1],
-    [1,0,1,1,1,1,1,0,1,1,0,1,0,0,0,1],
-    [1,0,1,2,0,0,1,0,0,1,0,1,1,1,0,1],
-    [1,0,1,1,1,0,1,1,0,1,0,0,0,1,0,1],
-    [1,0,0,0,1,0,0,0,0,1,1,1,0,1,0,1],
-    [1,1,1,0,1,1,1,1,0,0,0,1,0,1,2,1],
-    [1,2,0,0,0,0,0,1,1,1,0,1,0,0,0,1],
-    [1,0,0,1,1,1,0,0,0,0,0,1,1,0,3,1],
-    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [1, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 1],
+    [1, 0, 0,18, 0, 0, 0, 0, 0, 0,18, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0,18, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0,18, 0, 1],
+    [1, 0, 0, 0, 0, 1, 2, 0, 0, 2, 1, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1],
+    [1, 0, 0, 1, 0, 0,18, 0, 0,18, 0, 0, 1, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1],
+    [1, 0, 2, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 2, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 0, 0, 0, 0, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
   ]
 ];
 
@@ -469,7 +580,6 @@ function loadStage(stageNum) {
   mazeWalls = [];
   hidingSpots = [];
   exitDoorPos.set(0, 0, 0);
-  spawnWorldPos.set(0, STAND_HEIGHT, 0);
 
   // 2. Build new stage
   currentStageGroup = new THREE.Group();
@@ -481,9 +591,34 @@ function loadStage(stageNum) {
   const totalW = cols * CELL_SIZE;
   const totalL = rows * CELL_SIZE;
 
-  // Floor & Ceiling with shared Lambert material (lightweight)
-  const floorMat = new THREE.MeshLambertMaterial({ map: woodFloorTexture });
-  const ceilingMat = new THREE.MeshLambertMaterial({ color: 0x24180d });
+  // Scan grid for player spawn point (type === 4)
+  let spawnFound = false;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (grid[r][c] === 4) {
+        spawnWorldPos.set(c * CELL_SIZE, STAND_HEIGHT, r * CELL_SIZE);
+        spawnFound = true;
+        break;
+      }
+    }
+    if (spawnFound) break;
+  }
+  if (!spawnFound) {
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (grid[r][c] === 0) {
+          spawnWorldPos.set(c * CELL_SIZE, STAND_HEIGHT, r * CELL_SIZE);
+          spawnFound = true;
+          break;
+        }
+      }
+      if (spawnFound) break;
+    }
+  }
+
+  // Floor & Ceiling with shared Lambert material (lightweight & visible)
+  const floorMat = new THREE.MeshLambertMaterial({ map: (stageNum === 5 ? gymFloorTexture : woodFloorTexture) });
+  const ceilingMat = new THREE.MeshLambertMaterial({ color: 0x423428 });
   const wallMat = new THREE.MeshLambertMaterial({ map: woodWallTexture });
 
   const floorGeo = new THREE.PlaneGeometry(totalW, totalL);
@@ -498,8 +633,6 @@ function loadStage(stageNum) {
   currentStageGroup.add(ceiling);
 
   const wallGeo = new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, CELL_SIZE);
-  const bbGeo = new THREE.PlaneGeometry(2.4, 1.2);
-  const bbMat = new THREE.MeshBasicMaterial({ map: blackboardTexture });
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
@@ -512,13 +645,6 @@ function loadStage(stageNum) {
         wall.position.set(wx, WALL_HEIGHT / 2, wz);
         currentStageGroup.add(wall);
 
-        // Add occasional classroom blackboard on wall face
-        if ((r + c) % 5 === 0) {
-          const bb = new THREE.Mesh(bbGeo, bbMat);
-          bb.position.set(wx, 1.8, wz + CELL_SIZE / 2 + 0.02);
-          currentStageGroup.add(bb);
-        }
-
         mazeWalls.push({
           minX: wx - CELL_SIZE / 2,
           maxX: wx + CELL_SIZE / 2,
@@ -526,9 +652,21 @@ function loadStage(stageNum) {
           maxZ: wz + CELL_SIZE / 2
         });
       } else {
-        if (type === 4 && spawnWorldPos.length() === 0) {
-          spawnWorldPos.set(wx, STAND_HEIGHT, wz);
-        } else if (type === 2) {
+        // Hallway warm ceiling lamps for dim, atmospheric visibility
+        if (type === 0 && (r * 5 + c * 7) % 9 === 0) {
+          const lampMesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.12, 0.22, 0.08, 8),
+            new THREE.MeshBasicMaterial({ color: 0xffeed8 })
+          );
+          lampMesh.position.set(wx, WALL_HEIGHT - 0.05, wz);
+          currentStageGroup.add(lampMesh);
+
+          const corridorLight = new THREE.PointLight(0xffeacc, 0.95, 14);
+          corridorLight.position.set(wx, WALL_HEIGHT - 0.2, wz);
+          currentStageGroup.add(corridorLight);
+        }
+
+        if (type === 2) {
           // School Hiding Spot: Infirmary Bed or Wooden Locker
           if ((r + c) % 2 === 0) {
             buildSchoolInfirmaryBed(currentStageGroup, wx, wz);
@@ -538,25 +676,337 @@ function loadStage(stageNum) {
         } else if (type === 3) {
           exitDoorPos.set(wx, 0, wz);
           buildSchoolExitStairs(currentStageGroup, wx, wz, stageNum === MAX_STAGES);
+        } else if (type === 10) {
+          buildStudentDeskAndChair(currentStageGroup, wx, wz);
+        } else if (type === 11) {
+          buildChalkboard(currentStageGroup, wx, 1.8, wz - 1.2, 0, `第${stageNum}時限`, '〜 夜の旧校舎 〜');
+          buildTeacherPodium(currentStageGroup, wx, wz + 0.6);
+        } else if (type === 12) {
+          buildShoeLocker(currentStageGroup, wx, wz);
+        } else if (type === 13) {
+          buildNoticeBoard(currentStageGroup, wx, 1.8, wz);
+          buildFireExtinguisher(currentStageGroup, wx + 0.8, wz);
+        } else if (type === 14) {
+          buildScienceLabBench(currentStageGroup, wx, wz);
+        } else if (type === 15) {
+          buildAnatomySkeleton(currentStageGroup, wx, wz);
+        } else if (type === 16) {
+          buildMusicPiano(currentStageGroup, wx, wz);
+          buildComposerPortraits(currentStageGroup, wx, 2.0, wz - 1.5);
+        } else if (type === 17) {
+          buildLibraryBookshelf(currentStageGroup, wx, wz);
+        } else if (type === 18) {
+          buildGymEquipment(currentStageGroup, wx, wz);
         }
       }
     }
   }
+
+  // Warm light right over the spawn point
+  const spawnLight = new THREE.PointLight(0xfffaee, 1.35, 18);
+  spawnLight.position.set(spawnWorldPos.x, WALL_HEIGHT - 0.2, spawnWorldPos.z);
+  currentStageGroup.add(spawnLight);
+
+  // Position camera at spawn facing down the room
+  camera.position.copy(spawnWorldPos);
+  camera.rotation.set(0, 0, 0);
+  playerY = STAND_HEIGHT;
+  playerVy = 0;
+  isCrouching = false;
+  isHidden = false;
+  currentHidingSpot = null;
 
   // Update HUD Stage info
   const config = STAGE_CONFIGS[stageNum - 1];
   hudStageBadge.textContent = `STAGE ${stageNum} / ${MAX_STAGES}`;
   hudStageTitle.textContent = config.title;
   hudStageMonsters.textContent = config.monstersText;
-
-  // Move camera to spawn
-  camera.position.copy(spawnWorldPos);
-  playerY = STAND_HEIGHT;
-  playerVy = 0;
-  isCrouching = false;
-  isHidden = false;
-  currentHidingSpot = null;
   nextMonsterTimer = config.nextWait;
+}
+
+// --- Authentic Japanese School 3D Furniture & Props Builders ---
+// Student Desk and Chair
+function buildStudentDeskAndChair(parent, x, z, rotY = 0) {
+  const group = new THREE.Group();
+  const woodMat = new THREE.MeshLambertMaterial({ color: 0x8a633c });
+  const frameMat = new THREE.MeshLambertMaterial({ color: 0x2c3e50 });
+
+  // Desk top
+  const deskTop = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.05, 0.6), woodMat);
+  deskTop.position.set(0, 0.72, 0);
+  group.add(deskTop);
+
+  // Desk book tray
+  const tray = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.03, 0.54), frameMat);
+  tray.position.set(0, 0.62, 0);
+  group.add(tray);
+
+  // Notebook on desk
+  const book = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.02, 0.2), new THREE.MeshBasicMaterial({ color: 0xecf0f1 }));
+  book.position.set(0.12, 0.75, 0.05);
+  group.add(book);
+
+  // 4 Desk Legs
+  const legGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.72, 6);
+  [[-0.4, 0.36, -0.26], [0.4, 0.36, -0.26], [-0.4, 0.36, 0.26], [0.4, 0.36, 0.26]].forEach(p => {
+    const leg = new THREE.Mesh(legGeo, frameMat);
+    leg.position.set(...p);
+    group.add(leg);
+  });
+
+  // Chair
+  const chairSeat = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.04, 0.48), woodMat);
+  chairSeat.position.set(0, 0.45, 0.56);
+  group.add(chairSeat);
+
+  const chairBack = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.22, 0.04), woodMat);
+  chairBack.position.set(0, 0.78, 0.78);
+  group.add(chairBack);
+
+  // Chair legs
+  const chairLegGeo = new THREE.CylinderGeometry(0.018, 0.018, 0.45, 6);
+  [[-0.2, 0.225, 0.36], [0.2, 0.225, 0.36], [-0.2, 0.225, 0.76], [0.2, 0.225, 0.76]].forEach(p => {
+    const cl = new THREE.Mesh(chairLegGeo, frameMat);
+    cl.position.set(...p);
+    group.add(cl);
+  });
+
+  group.position.set(x, 0, z);
+  group.rotation.y = rotY;
+  parent.add(group);
+}
+
+// Teacher's Raised Podium & Desk
+function buildTeacherPodium(parent, x, z) {
+  const group = new THREE.Group();
+  const woodMat = new THREE.MeshLambertMaterial({ color: 0x5a3d24 });
+
+  // Raised platform
+  const plat = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.14, 1.4), woodMat);
+  plat.position.set(0, 0.07, 0);
+  group.add(plat);
+
+  // Large teacher desk
+  const desk = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.76, 0.8), woodMat);
+  desk.position.set(0, 0.52, 0);
+  group.add(desk);
+
+  // Red teacher attendance book & chalk box
+  const book = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.03, 0.24), new THREE.MeshLambertMaterial({ color: 0xc0392b }));
+  book.position.set(-0.35, 0.92, 0);
+  const chalkBox = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.04, 0.12), new THREE.MeshLambertMaterial({ color: 0xf1c40f }));
+  chalkBox.position.set(0.35, 0.92, 0);
+  group.add(book, chalkBox);
+
+  group.position.set(x, 0, z);
+  parent.add(group);
+}
+
+// Japanese School Chalkboard
+function buildChalkboard(parent, x, y, z, rotY = 0) {
+  const board = new THREE.Mesh(
+    new THREE.PlaneGeometry(3.0, 1.4),
+    new THREE.MeshBasicMaterial({ map: blackboardTexture })
+  );
+  board.position.set(x, y, z);
+  board.rotation.y = rotY;
+  parent.add(board);
+}
+
+// Shoe Locker (下駄箱)
+function buildShoeLocker(parent, x, z) {
+  const locker = new THREE.Mesh(
+    new THREE.BoxGeometry(2.2, 1.5, 0.7),
+    new THREE.MeshLambertMaterial({ map: shoeLockerTexture })
+  );
+  locker.position.set(x, 0.75, z);
+  parent.add(locker);
+}
+
+// School Notice Board & Calligraphy
+function buildNoticeBoard(parent, x, y, z) {
+  const board = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.2, 1.1),
+    new THREE.MeshBasicMaterial({ map: noticeBoardTexture })
+  );
+  board.position.set(x, y, z);
+  parent.add(board);
+}
+
+// Fire Extinguisher (消火器)
+function buildFireExtinguisher(parent, x, z) {
+  const ext = new THREE.Group();
+  const redMat = new THREE.MeshLambertMaterial({ color: 0xd63031 });
+  const darkMat = new THREE.MeshLambertMaterial({ color: 0x2d3436 });
+
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.45, 10), redMat);
+  body.position.y = 0.225;
+  const nozzle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.08, 0.08), darkMat);
+  nozzle.position.set(0, 0.48, 0);
+  ext.add(body, nozzle);
+
+  ext.position.set(x, 0, z);
+  parent.add(ext);
+}
+
+// Science Lab Bench with Sink & Flask
+function buildScienceLabBench(parent, x, z) {
+  const bench = new THREE.Group();
+  const blackMat = new THREE.MeshLambertMaterial({ color: 0x1f2421 });
+  const woodMat = new THREE.MeshLambertMaterial({ color: 0x4a3728 });
+
+  // Black chemical resistant table top
+  const top = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.08, 1.0), blackMat);
+  top.position.y = 0.76;
+  bench.add(top);
+
+  // Wooden base cabinet
+  const base = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.72, 0.9), woodMat);
+  base.position.y = 0.36;
+  bench.add(base);
+
+  // Faucet
+  const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.3, 8), new THREE.MeshBasicMaterial({ color: 0xbdc3c7 }));
+  pipe.position.set(0, 0.95, -0.2);
+  bench.add(pipe);
+
+  // Glowing chemical flask (eerie neon blue / green)
+  const flask = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.09, 0.18, 8), new THREE.MeshBasicMaterial({ color: 0x00ffcc }));
+  flask.position.set(0.5, 0.88, 0.1);
+  bench.add(flask);
+
+  bench.position.set(x, 0, z);
+  parent.add(bench);
+}
+
+// Creepy Japanese School Anatomy Skeleton (人体模型)
+function buildAnatomySkeleton(parent, x, z) {
+  const skeleton = new THREE.Group();
+  const boneMat = new THREE.MeshLambertMaterial({ color: 0xe5e0d4 });
+  const redMat = new THREE.MeshLambertMaterial({ color: 0x8b0000 });
+  const standMat = new THREE.MeshLambertMaterial({ color: 0x1e272e });
+
+  // Stand pole
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.8, 6), standMat);
+  pole.position.y = 0.9;
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.04, 12), standMat);
+  base.position.y = 0.02;
+  skeleton.add(pole, base);
+
+  // Skull
+  const skull = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.28, 0.24), boneMat);
+  skull.position.set(0, 1.65, 0.06);
+  skeleton.add(skull);
+
+  // Glowing red creepy eye sockets
+  const eye = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.02), new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+  eye.position.set(-0.05, 1.66, 0.18);
+  const eye2 = eye.clone();
+  eye2.position.x = 0.05;
+  skeleton.add(eye, eye2);
+
+  // Half Ribcage (Bone) & Half Muscle (Red organ)
+  const ribcage = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.45, 0.18), boneMat);
+  ribcage.position.set(-0.09, 1.25, 0.06);
+  const muscle = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.45, 0.18), redMat);
+  muscle.position.set(0.09, 1.25, 0.06);
+  skeleton.add(ribcage, muscle);
+
+  skeleton.position.set(x, 0, z);
+  parent.add(skeleton);
+}
+
+// Music Room Grand Piano
+function buildMusicPiano(parent, x, z) {
+  const piano = new THREE.Group();
+  const glossBlack = new THREE.MeshLambertMaterial({ color: 0x111111 });
+  const keyMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+  // Body
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.5, 1.4), glossBlack);
+  body.position.y = 0.75;
+  piano.add(body);
+
+  // Keyboard
+  const keys = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.06, 0.22), keyMat);
+  keys.position.set(0, 0.78, 0.65);
+  piano.add(keys);
+
+  // 3 Piano legs
+  const pLegGeo = new THREE.CylinderGeometry(0.04, 0.03, 0.5, 8);
+  [[-0.8, 0.25, -0.5], [0.8, 0.25, -0.5], [0, 0.25, 0.5]].forEach(p => {
+    const l = new THREE.Mesh(pLegGeo, glossBlack);
+    l.position.set(...p);
+    piano.add(l);
+  });
+
+  // Piano stool
+  const stool = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.45, 0.3), glossBlack);
+  stool.position.set(0, 0.225, 1.1);
+  piano.add(stool);
+
+  piano.position.set(x, 0, z);
+  parent.add(piano);
+}
+
+// Classical Composer Wall Portraits (Beethoven, Bach)
+function buildComposerPortraits(parent, x, y, z) {
+  const frame = new THREE.Mesh(
+    new THREE.BoxGeometry(1.0, 1.3, 0.04),
+    new THREE.MeshLambertMaterial({ color: 0x5a3d24 })
+  );
+  frame.position.set(x, y, z);
+  parent.add(frame);
+}
+
+// Library Tall Bookshelf
+function buildLibraryBookshelf(parent, x, z) {
+  const shelf = new THREE.Group();
+  const woodMat = new THREE.MeshLambertMaterial({ color: 0x4a321e });
+
+  // Outer frame
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(1.8, 2.6, 0.6), woodMat);
+  frame.position.y = 1.3;
+  shelf.add(frame);
+
+  // Rows of colorful book spines
+  const colors = [0x9b59b6, 0x34495e, 0x16a085, 0xd35400, 0x27ae60];
+  for (let s = 0; s < 4; s++) {
+    const row = new THREE.Mesh(
+      new THREE.BoxGeometry(1.6, 0.38, 0.02),
+      new THREE.MeshLambertMaterial({ color: colors[s % colors.length] })
+    );
+    row.position.set(0, 0.5 + s * 0.55, 0.31);
+    shelf.add(row);
+  }
+
+  shelf.position.set(x, 0, z);
+  parent.add(shelf);
+}
+
+// Gym Vaulting Box (跳び箱) and Blue Mat
+function buildGymEquipment(parent, x, z) {
+  const gym = new THREE.Group();
+  const woodMat = new THREE.MeshLambertMaterial({ color: 0xb88950 });
+  const padMat = new THREE.MeshLambertMaterial({ color: 0xe0d6b5 });
+  const matMat = new THREE.MeshLambertMaterial({ color: 0x2980b9 });
+
+  // 5-layer vaulting box
+  for (let l = 0; l < 5; l++) {
+    const w = 1.2 - l * 0.08;
+    const d = 0.7 - l * 0.05;
+    const layer = new THREE.Mesh(new THREE.BoxGeometry(w, 0.16, d), (l === 4 ? padMat : woodMat));
+    layer.position.y = 0.08 + l * 0.16;
+    gym.add(layer);
+  }
+
+  // Thick Blue Gym Mat
+  const mat = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.08, 1.2), matMat);
+  mat.position.set(0, 0.04, 1.2);
+  gym.add(mat);
+
+  gym.position.set(x, 0, z);
+  parent.add(gym);
 }
 
 // Build School Infirmary Bed
@@ -744,10 +1194,10 @@ function updateCinematicCamera(now) {
 function setupEventListeners() {
   window.addEventListener('keydown', (e) => {
     const k = e.key.toLowerCase();
-    if (k === 'w') keys.w = true;
-    if (k === 'a') keys.a = true;
-    if (k === 's') keys.s = true;
-    if (k === 'd') keys.d = true;
+    if (k === 'w' || e.key === 'ArrowUp') keys.w = true;
+    if (k === 'a' || e.key === 'ArrowLeft') keys.a = true;
+    if (k === 's' || e.key === 'ArrowDown') keys.s = true;
+    if (k === 'd' || e.key === 'ArrowRight') keys.d = true;
     if (e.key === 'Shift') keys.shift = true;
 
     // Jump [Space]
@@ -771,19 +1221,32 @@ function setupEventListeners() {
 
   window.addEventListener('keyup', (e) => {
     const k = e.key.toLowerCase();
-    if (k === 'w') keys.w = false;
-    if (k === 'a') keys.a = false;
-    if (k === 's') keys.s = false;
-    if (k === 'd') keys.d = false;
+    if (k === 'w' || e.key === 'ArrowUp') keys.w = false;
+    if (k === 'a' || e.key === 'ArrowLeft') keys.a = false;
+    if (k === 's' || e.key === 'ArrowDown') keys.s = false;
+    if (k === 'd' || e.key === 'ArrowRight') keys.d = false;
     if (e.key === 'Shift') keys.shift = false;
   });
 
-  // Pointer lock
+  // Pointer lock and mouse look controls
   const canvas = renderer.domElement;
-  canvas.addEventListener('click', () => {
-    if (gameState === 'playing' && !isPointerLocked) {
-      canvas.requestPointerLock();
+  let isMouseDown = false;
+  let lastMouseX = 0;
+  let lastMouseY = 0;
+
+  canvas.addEventListener('mousedown', (e) => {
+    if (gameState === 'playing') {
+      isMouseDown = true;
+      lastMouseX = e.clientX;
+      lastMouseY = e.clientY;
+      if (!isPointerLocked) {
+        try { canvas.requestPointerLock(); } catch(err) {}
+      }
     }
+  });
+
+  window.addEventListener('mouseup', () => {
+    isMouseDown = false;
   });
 
   document.addEventListener('pointerlockchange', () => {
@@ -791,11 +1254,21 @@ function setupEventListeners() {
   });
 
   document.addEventListener('mousemove', (e) => {
-    if (!isPointerLocked || isHidden || gameState !== 'playing') return;
-    const sens = 0.0022;
-    camera.rotation.y -= e.movementX * sens;
-    camera.rotation.x -= e.movementY * sens;
-    camera.rotation.x = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, camera.rotation.x));
+    if (isHidden || gameState !== 'playing') return;
+    const sens = 0.0024;
+    if (isPointerLocked) {
+      camera.rotation.y -= e.movementX * sens;
+      camera.rotation.x -= e.movementY * sens;
+      camera.rotation.x = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, camera.rotation.x));
+    } else if (isMouseDown) {
+      const dx = e.clientX - lastMouseX;
+      const dy = e.clientY - lastMouseY;
+      lastMouseX = e.clientX;
+      lastMouseY = e.clientY;
+      camera.rotation.y -= dx * sens;
+      camera.rotation.x -= dy * sens;
+      camera.rotation.x = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, camera.rotation.x));
+    }
   });
 
   // HUD buttons
@@ -1544,7 +2017,9 @@ function startGameplay(startStage = 1) {
   updateSlotUI();
   sound.startSchoolAmbience();
 
-  renderer.domElement.requestPointerLock();
+  try {
+    renderer.domElement.requestPointerLock();
+  } catch (e) {}
 }
 
 // --- Multiplayer 3D Character Models (Custom Roblox Avatar) ---
