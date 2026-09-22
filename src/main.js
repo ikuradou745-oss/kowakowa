@@ -653,52 +653,6 @@ function createGymWallTexture() {
   return texture;
 }
 
-// --- Application Bootstrap ---
-function boot() {
-  try {
-    initThree();
-    buildFirstPersonFlashlight();
-    buildAllMonsters();
-    loadStage(1);
-    setupEventListeners();
-    setupCustomizerUI();
-
-    // Pre-connect RoomManager in background for instant online lobby creation
-    try {
-      if (!roomManager) {
-        roomManager = new RoomManager(localPlayerId, localPlayerName);
-      }
-    } catch (e) {
-      console.warn('[Kowakowa] RoomManager pre-connect skipped:', e);
-    }
-
-    // Animation Loop
-    let lastTime = performance.now();
-    function animate(now) {
-      const dt = Math.min((now - lastTime) / 1000, 0.1);
-      lastTime = now;
-
-      if (gameState === 'playing') {
-        updateGame(dt);
-      } else if (gameState === 'title' || gameState === 'lobby') {
-        updateCinematicCamera(now);
-      }
-
-      renderThree(dt);
-      requestAnimationFrame(animate);
-    }
-    requestAnimationFrame(animate);
-  } catch (err) {
-    console.error('[Kowakowa Boot Error]', err);
-  }
-}
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', boot);
-} else {
-  boot();
-}
-
 // --- High-Performance Three.js Setup (Shadows disabled, lightweight materials) ---
 function initThree() {
   const container = document.getElementById('canvasContainer');
@@ -984,10 +938,12 @@ function loadStage(stageNum) {
   scene.add(currentStageGroup);
 
   // 1. Deep clone stage maze so random exit placement does not mutate original blueprint
-  const baseGrid = (stageNum <= 5) ? STAGE_MAZES[stageNum - 1] : generateProceduralStage(stageNum);
+  const baseGrid = (stageNum >= 1 && stageNum <= 5 && Array.isArray(STAGE_MAZES) && STAGE_MAZES[stageNum - 1])
+    ? STAGE_MAZES[stageNum - 1]
+    : generateProceduralStage(stageNum);
   const grid = baseGrid.map(row => [...row]);
   const rows = grid.length;
-  const cols = grid[0].length;
+  const cols = (grid[0] && grid[0].length) ? grid[0].length : 14;
   const totalW = cols * CELL_SIZE;
   const totalL = rows * CELL_SIZE;
 
@@ -2873,4 +2829,50 @@ function handleRemotePlayerMove(id, data) {
 // --- Render Loop ---
 function renderThree(dt) {
   renderer.render(scene, camera);
+}
+
+// --- Application Bootstrap ---
+function boot() {
+  try {
+    initThree();
+    buildFirstPersonFlashlight();
+    buildAllMonsters();
+    loadStage(1);
+    setupEventListeners();
+    setupCustomizerUI();
+
+    // Pre-connect RoomManager in background for instant online lobby creation
+    try {
+      if (!roomManager) {
+        roomManager = new RoomManager(localPlayerId, localPlayerName);
+      }
+    } catch (e) {
+      console.warn('[Kowakowa] RoomManager pre-connect skipped:', e);
+    }
+
+    // Animation Loop
+    let lastTime = performance.now();
+    function animate(now) {
+      const dt = Math.min((now - lastTime) / 1000, 0.1);
+      lastTime = now;
+
+      if (gameState === 'playing') {
+        updateGame(dt);
+      } else if (gameState === 'title' || gameState === 'lobby') {
+        updateCinematicCamera(now);
+      }
+
+      renderThree(dt);
+      requestAnimationFrame(animate);
+    }
+    requestAnimationFrame(animate);
+  } catch (err) {
+    console.error('[Kowakowa Boot Error]', err);
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', boot);
+} else {
+  boot();
 }
