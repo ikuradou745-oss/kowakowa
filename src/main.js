@@ -2278,7 +2278,8 @@ function updateInteractPrompt() {
 
   const distToExit = camera.position.distanceTo(new THREE.Vector3(exitDoorPos.x, camera.position.y, exitDoorPos.z));
   if (distToExit < 3.2) {
-    if (currentStage === MAX_STAGES) {
+    const maxStages = getMaxStages();
+    if (currentStage >= maxStages) {
       interactPrompt.textContent = '【E】正門を開けて脱出する！';
     } else {
       interactPrompt.textContent = `【E】階段を上がり第${currentStage + 1}ステージへ進む`;
