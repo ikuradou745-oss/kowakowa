@@ -1,0 +1,19 @@
+{
+  "name": "kowakowa",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "esbuild src/main.js --bundle --outfile=game.js --format=esm && node server.js",
+    "build": "esbuild src/main.js --bundle --minify --outfile=game.js --format=esm",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "firebase": "^12.19.0",
+    "three": "^0.186.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}
