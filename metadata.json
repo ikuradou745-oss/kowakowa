@@ -1,6 +1,6 @@
 {
-  "name": "Kowakowa",
-  "description": "The Backrooms: Escape - ロブロックス風3Dバックルーム迷路脱出ホラー。画面が黒色に点滅したらベッドに隠れ、赤色に点滅したらしゃがめ！ジャンプ・キャラ見た目変更・最大4人協力対応。",
+  "name": "Kowakowa (こわこわ) 〜 夜の旧校舎からの脱出 〜",
+  "description": "ロブロックス風3D学校ホラー『こわこわ』。木造旧校舎の全5ステージ迷路。点滅の色（黒・赤・青・紫）に合わせて隠れろ・しゃがめ・跳べ・明かりを消せ！最大4人オンライン協力マルチプレイ対応。",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

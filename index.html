@@ -3,16 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>The Backrooms: Escape - ロブロックス風3Dホラー</title>
-  <meta name="description" content="ロブロックス風3Dバックルーム脱出ホラー。画面が黒色に点滅したらベッドに隠れろ、赤色に点滅したらしゃがめ！マルチプレイ・キャラカスタマイズ対応。">
-  <meta property="og:title" content="The Backrooms: Escape - ロブロックス風3Dホラー">
-  <meta property="og:description" content="ロブロックス風3Dバックルーム脱出ホラー。画面が黒色に点滅したらベッドに隠れろ、赤色に点滅したらしゃがめ！マルチプレイ・キャラカスタマイズ対応。">
+  <title>Kowakowa (こわこわ) 〜 夜の旧校舎からの脱出 〜</title>
+  <meta name="description" content="ロブロックス風3D学校ホラー『こわこわ』。木造旧校舎の全5ステージ迷路。点滅の色（黒・赤・青・紫）に合わせて隠れろ・しゃがめ・跳べ・明かりを消せ！最大4人オンライン協力マルチプレイ対応。">
+  <meta property="og:title" content="Kowakowa (こわこわ) 〜 夜の旧校舎からの脱出 〜">
+  <meta property="og:description" content="ロブロックス風3D学校ホラー『こわこわ』。木造旧校舎の全5ステージ迷路。点滅の色（黒・赤・青・紫）に合わせて隠れろ・しゃがめ・跳べ・明かりを消せ！最大4人オンライン協力マルチプレイ対応。">
   <style>
     :root {
-      --bg: #1c1810;
-      --backrooms-yellow: #d4b85c;
-      --backrooms-dark: #221c12;
-      --accent: #f1c40f;
+      --bg: #0d0a07;
+      --wood-dark: #1e150f;
+      --wood-light: #4a3420;
+      --accent: #e67e22;
+      --accent-gold: #f39c12;
       --danger: #e74c3c;
     }
 
@@ -42,7 +43,7 @@
       z-index: 1;
     }
 
-    /* Subtle horror lens vignette */
+    /* Horror lens vignette */
     .screen-vignette {
       position: fixed;
       top: 0;
@@ -50,11 +51,11 @@
       width: 100%;
       height: 100%;
       pointer-events: none;
-      box-shadow: inset 0 0 70px rgba(25, 20, 10, 0.45);
+      box-shadow: inset 0 0 90px rgba(5, 3, 2, 0.65);
       z-index: 5;
     }
 
-    /* Warning Overlay: Black flickers (Hide!) or Red flickers (Crouch!) */
+    /* Warning Overlays: 4 Distinct Color Flickers */
     #warningOverlay {
       position: fixed;
       top: 0;
@@ -64,19 +65,29 @@
       pointer-events: none;
       z-index: 50;
       background: transparent;
-      transition: background 0.05s ease;
+      transition: background 0.04s ease;
     }
 
     .flicker-blackout {
-      background: rgba(6, 5, 3, 0.96) !important;
+      background: rgba(0, 0, 0, 0.98) !important;
     }
 
     .flicker-red {
-      background: rgba(220, 20, 20, 0.78) !important;
-      box-shadow: inset 0 0 140px #ff0000;
+      background: rgba(220, 20, 20, 0.8) !important;
+      box-shadow: inset 0 0 150px #ff0000;
     }
 
-    /* Jumpscare Screen (quick 0.85s horror transition then back to home) */
+    .flicker-blue {
+      background: rgba(20, 60, 220, 0.78) !important;
+      box-shadow: inset 0 0 150px #0066ff;
+    }
+
+    .flicker-purple {
+      background: rgba(130, 20, 180, 0.82) !important;
+      box-shadow: inset 0 0 150px #aa00ff;
+    }
+
+    /* Jumpscare Screen */
     #jumpscareOverlay {
       position: fixed;
       top: 0;
@@ -96,7 +107,7 @@
       height: 320px;
       background: #0d0a0a;
       border: 8px solid #ff1111;
-      box-shadow: 0 0 90px #ff0000;
+      box-shadow: 0 0 100px #ff0000;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -152,25 +163,65 @@
       display: none;
     }
 
+    /* Stage Progression Banner (Top Center) */
+    .hud-stage-banner {
+      position: absolute;
+      top: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(20, 14, 10, 0.88);
+      border: 2px solid var(--accent-gold);
+      padding: 6px 20px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.8);
+      pointer-events: auto;
+    }
+
+    .stage-badge {
+      background: var(--accent-gold);
+      color: #111;
+      font-size: 0.82rem;
+      font-weight: 900;
+      padding: 2px 8px;
+      border-radius: 10px;
+      letter-spacing: 0.05em;
+    }
+
+    .stage-title {
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .stage-monsters-tip {
+      font-size: 0.75rem;
+      color: #ddd;
+      border-left: 1px solid rgba(255, 255, 255, 0.3);
+      padding-left: 10px;
+    }
+
     /* Stance Badge (Standing / Crouching / Hidden) */
     .hud-stance-badge {
       position: absolute;
       top: 20px;
-      left: 25px;
-      background: rgba(25, 20, 14, 0.85);
-      border: 1px solid rgba(212, 184, 92, 0.5);
+      left: 20px;
+      background: rgba(20, 15, 10, 0.88);
+      border: 1px solid rgba(230, 126, 34, 0.5);
       padding: 6px 14px;
       border-radius: 20px;
       font-size: 0.82rem;
       font-weight: 700;
-      color: #f1c40f;
+      color: #f39c12;
       display: flex;
       align-items: center;
       gap: 6px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
     }
 
-    /* Roblox-style Item Hotbar at bottom center */
+    /* Item Hotbar at bottom center */
     .hud-hotbar-container {
       position: absolute;
       bottom: 25px;
@@ -186,7 +237,7 @@
       position: relative;
       width: 74px;
       height: 74px;
-      background: rgba(25, 21, 15, 0.85);
+      background: rgba(25, 18, 12, 0.9);
       border: 3px solid rgba(255, 255, 255, 0.2);
       border-radius: 12px;
       display: flex;
@@ -195,19 +246,17 @@
       justify-content: center;
       cursor: pointer;
       transition: all 0.15s ease;
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
-      backdrop-filter: blur(6px);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.7);
     }
 
     .hotbar-slot:hover {
-      border-color: rgba(241, 196, 15, 0.7);
-      background: rgba(38, 32, 22, 0.9);
+      border-color: rgba(243, 156, 18, 0.7);
     }
 
     .hotbar-slot.active {
-      border-color: #f1c40f;
-      background: rgba(241, 196, 15, 0.25);
-      box-shadow: 0 0 20px rgba(241, 196, 15, 0.6);
+      border-color: #f39c12;
+      background: rgba(243, 156, 18, 0.25);
+      box-shadow: 0 0 20px rgba(243, 156, 18, 0.6);
       transform: translateY(-4px);
     }
 
@@ -239,7 +288,7 @@
     .hotbar-state-pill {
       position: absolute;
       bottom: -10px;
-      background: #f1c40f;
+      background: #f39c12;
       color: #111;
       font-size: 0.6rem;
       font-weight: 900;
@@ -263,8 +312,8 @@
     }
 
     .action-btn {
-      background: #252016;
-      border: 2px solid rgba(212, 184, 92, 0.4);
+      background: #251910;
+      border: 2px solid rgba(230, 126, 34, 0.4);
       color: #fff;
       font-weight: 700;
       font-size: 0.88rem;
@@ -280,14 +329,14 @@
     }
 
     .action-btn:hover {
-      background: #383020;
-      border-color: #f1c40f;
+      background: #3a271a;
+      border-color: #f39c12;
     }
 
     .action-btn.active {
-      background: rgba(241, 196, 15, 0.3);
-      border-color: #f1c40f;
-      color: #f1c40f;
+      background: rgba(243, 156, 18, 0.3);
+      border-color: #f39c12;
+      color: #f39c12;
     }
 
     .action-btn:disabled {
@@ -306,7 +355,7 @@
     .cooldown-fill {
       width: 100%;
       height: 100%;
-      background: #f1c40f;
+      background: #f39c12;
     }
 
     /* Crosshair */
@@ -321,14 +370,14 @@
       border-radius: 50%;
     }
 
-    /* Interaction Prompt (Bed / Exit Door) */
+    /* Interaction Prompt (Bed / Locker / Exit Stairs) */
     #interactPrompt {
       position: absolute;
       top: 60%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background: rgba(20, 16, 10, 0.92);
-      border: 2px solid var(--accent);
+      background: rgba(20, 14, 10, 0.95);
+      border: 2px solid var(--accent-gold);
       color: #fff;
       font-size: 1.15rem;
       font-weight: 700;
@@ -336,7 +385,7 @@
       border-radius: 8px;
       display: none;
       animation: pulse 0.9s infinite alternate;
-      box-shadow: 0 0 25px rgba(241, 196, 15, 0.4);
+      box-shadow: 0 0 25px rgba(243, 156, 18, 0.4);
     }
 
     @keyframes pulse {
@@ -368,6 +417,42 @@
       display: none;
     }
 
+    /* Stage Clear Flash Banner */
+    #stageTransitionOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.88);
+      z-index: 180;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .stage-clear-title {
+      font-size: 2.4rem;
+      color: #f39c12;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      margin-bottom: 10px;
+      text-shadow: 0 0 25px rgba(243, 156, 18, 0.8);
+    }
+
+    .stage-clear-desc {
+      font-size: 1.1rem;
+      color: #eee;
+      margin-bottom: 16px;
+    }
+
+    .stage-clear-tip {
+      font-size: 0.85rem;
+      color: #aaa;
+    }
+
     /* Modals & Home Screen Overlay */
     .modal-screen {
       position: fixed;
@@ -387,36 +472,36 @@
     }
 
     .home-card {
-      background: rgba(22, 18, 12, 0.9);
-      border: 2px solid rgba(212, 184, 92, 0.5);
+      background: rgba(22, 15, 10, 0.94);
+      border: 2px solid rgba(230, 126, 34, 0.5);
       border-radius: 14px;
       padding: 22px 26px;
       max-width: 640px;
       width: 100%;
-      box-shadow: 0 16px 45px rgba(0, 0, 0, 0.88);
+      box-shadow: 0 16px 45px rgba(0, 0, 0, 0.9);
       text-align: center;
-      backdrop-filter: blur(10px);
-      max-height: 90vh;
+      backdrop-filter: blur(8px);
+      max-height: 92vh;
       overflow-y: auto;
     }
 
     .game-logo {
-      font-size: 2.2rem;
+      font-size: 2.4rem;
       font-weight: 900;
-      letter-spacing: 0.12em;
-      color: #fff;
-      text-shadow: 0 0 25px rgba(212, 184, 92, 0.8);
+      letter-spacing: 0.16em;
+      color: #ff5252;
+      text-shadow: 0 0 25px rgba(255, 82, 82, 0.8);
       margin-bottom: 2px;
     }
 
     .game-sub {
-      color: #d4b85c;
-      font-size: 0.86rem;
+      color: #f39c12;
+      font-size: 0.9rem;
       margin-bottom: 14px;
-      font-weight: 600;
+      font-weight: 700;
+      letter-spacing: 0.08em;
     }
 
-    /* Death toast on home screen */
     #homeDeathToast {
       background: rgba(180, 20, 20, 0.92);
       border: 1px solid #ff4444;
@@ -427,18 +512,12 @@
       font-weight: 700;
       margin-bottom: 12px;
       display: none;
-      animation: fadeIn 0.3s ease;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(-6px); }
-      to { opacity: 1; transform: translateY(0); }
     }
 
     /* Character Appearance Customizer Section */
     .customizer-box {
-      background: rgba(15, 12, 8, 0.75);
-      border: 1px solid rgba(212, 184, 92, 0.35);
+      background: rgba(15, 10, 6, 0.8);
+      border: 1px solid rgba(230, 126, 34, 0.35);
       border-radius: 10px;
       padding: 12px 16px;
       margin-bottom: 14px;
@@ -448,7 +527,7 @@
     .customizer-header {
       font-size: 0.88rem;
       font-weight: 700;
-      color: #f1c40f;
+      color: #f39c12;
       margin-bottom: 10px;
       display: flex;
       justify-content: space-between;
@@ -500,8 +579,8 @@
     }
 
     .hat-pill {
-      background: rgba(45, 37, 26, 0.8);
-      border: 1px solid rgba(212, 184, 92, 0.3);
+      background: rgba(45, 30, 18, 0.8);
+      border: 1px solid rgba(230, 126, 34, 0.3);
       color: #eee;
       font-size: 0.75rem;
       padding: 4px 10px;
@@ -511,10 +590,10 @@
     }
 
     .hat-pill.active {
-      background: #f1c40f;
+      background: #f39c12;
       color: #111;
       font-weight: 700;
-      border-color: #f1c40f;
+      border-color: #f39c12;
     }
 
     /* Item Selection Cards */
@@ -527,8 +606,8 @@
     }
 
     .item-select-card {
-      background: rgba(35, 29, 20, 0.85);
-      border: 2px solid rgba(212, 184, 92, 0.25);
+      background: rgba(35, 24, 15, 0.85);
+      border: 2px solid rgba(230, 126, 34, 0.25);
       border-radius: 8px;
       padding: 10px 8px;
       cursor: pointer;
@@ -540,14 +619,14 @@
     }
 
     .item-select-card:hover {
-      border-color: rgba(241, 196, 15, 0.6);
-      background: rgba(50, 42, 28, 0.9);
+      border-color: rgba(243, 156, 18, 0.6);
+      background: rgba(50, 35, 22, 0.9);
     }
 
     .item-select-card.selected {
-      border-color: #f1c40f;
-      background: rgba(241, 196, 15, 0.2);
-      box-shadow: 0 0 14px rgba(241, 196, 15, 0.35);
+      border-color: #f39c12;
+      background: rgba(243, 156, 18, 0.2);
+      box-shadow: 0 0 14px rgba(243, 156, 18, 0.35);
     }
 
     .item-card-icon {
@@ -577,8 +656,8 @@
 
     .text-input {
       flex: 1;
-      background: rgba(30, 25, 17, 0.85);
-      border: 1px solid rgba(212, 184, 92, 0.4);
+      background: rgba(30, 20, 14, 0.85);
+      border: 1px solid rgba(230, 126, 34, 0.4);
       border-radius: 6px;
       padding: 10px 12px;
       color: #fff;
@@ -587,7 +666,7 @@
     }
 
     .text-input:focus {
-      border-color: #f1c40f;
+      border-color: #f39c12;
     }
 
     .primary-actions-grid {
@@ -649,14 +728,18 @@
     }
 
     .rules-box {
-      background: rgba(15, 12, 8, 0.7);
-      border-left: 3px solid #d4b85c;
-      padding: 8px 12px;
-      font-size: 0.75rem;
-      color: #ccc;
+      background: rgba(15, 10, 6, 0.85);
+      border-left: 3px solid #f39c12;
+      padding: 10px 14px;
+      font-size: 0.76rem;
+      color: #ddd;
       text-align: left;
       margin-top: 10px;
-      line-height: 1.45;
+      line-height: 1.5;
+    }
+
+    .rules-box strong {
+      color: #f39c12;
     }
 
     /* Lobby screen list */
@@ -668,8 +751,8 @@
     }
 
     .lobby-player-card {
-      background: rgba(30, 25, 18, 0.85);
-      border: 1px solid rgba(212, 184, 92, 0.35);
+      background: rgba(30, 20, 14, 0.85);
+      border: 1px solid rgba(230, 126, 34, 0.35);
       border-radius: 8px;
       padding: 12px;
       text-align: center;
@@ -682,12 +765,12 @@
       background: rgba(0, 0, 0, 0.5);
       padding: 6px 14px;
       border-radius: 20px;
-      border: 1px solid #f1c40f;
+      border: 1px solid #f39c12;
       margin-bottom: 12px;
     }
 
     .btn-copy {
-      background: #f1c40f;
+      background: #f39c12;
       color: #111;
       border: none;
       padding: 3px 8px;
@@ -716,6 +799,11 @@
         flex-wrap: wrap;
         max-width: 140px;
       }
+      .hud-stage-banner {
+        top: 10px;
+        padding: 4px 12px;
+        font-size: 0.8rem;
+      }
     }
   </style>
 </head>
@@ -727,10 +815,10 @@
   <!-- Horror Lens Vignette -->
   <div class="screen-vignette"></div>
 
-  <!-- Warning Overlay: Black flickers (Hide!) or Red flickers (Crouch!) -->
+  <!-- Warning Overlay: Black / Red / Blue / Purple flickers -->
   <div id="warningOverlay"></div>
 
-  <!-- Jumpscare Screen (Quick 0.85s scare then returns to 3D home screen) -->
+  <!-- Jumpscare Screen -->
   <div id="jumpscareOverlay">
     <div class="jumpscare-face">
       <div class="jumpscare-eye-row">
@@ -747,8 +835,22 @@
     </div>
   </div>
 
+  <!-- Stage Transition Overlay -->
+  <div id="stageTransitionOverlay">
+    <h2 class="stage-clear-title" id="transitionTitle">第1ステージ クリア！</h2>
+    <p class="stage-clear-desc" id="transitionDesc">階段を駆け上がり、第2ステージへ突入します……</p>
+    <p class="stage-clear-tip" id="transitionTip">※前ステージの迷路は消滅し、新たなバケモノが追加されます</p>
+  </div>
+
   <!-- In-game HUD -->
   <div id="hud">
+    <!-- Stage Progression Banner -->
+    <div class="hud-stage-banner">
+      <span class="stage-badge" id="hudStageBadge">STAGE 1 / 5</span>
+      <span class="stage-title" id="hudStageTitle">1階 普通教室・廊下の迷路</span>
+      <span class="stage-monsters-tip" id="hudStageMonsters">出現: ⬛影のバケモノ</span>
+    </div>
+
     <!-- Stance Indicator -->
     <div class="hud-stance-badge" id="stanceBadge">
       <span id="stanceIcon">🧍</span>
@@ -756,9 +858,9 @@
     </div>
 
     <div class="crosshair"></div>
-    <div id="interactPrompt">【E】ベッドの下に潜る</div>
+    <div id="interactPrompt">【E】ベッド・ロッカーに隠れる</div>
 
-    <!-- Roblox-style Hotbar: Slot [1] held toggles item effects -->
+    <!-- Hotbar: Slot [1] held toggles flashlight -->
     <div class="hud-hotbar-container">
       <div class="hotbar-slot active" id="hotbarSlot1">
         <span class="hotbar-key">[1]</span>
@@ -768,7 +870,7 @@
       </div>
     </div>
 
-    <!-- Right Side HUD Quick Actions (Crouch C / Jump Space / Hide E / Drink Q) -->
+    <!-- Right Side HUD Quick Actions -->
     <div class="hud-actions">
       <button class="action-btn" id="crouchBtn">
         <span>🦆 しゃがむ [C]</span>
@@ -795,24 +897,24 @@
     <div id="virtualJoypad"></div>
   </div>
 
-  <!-- 3D Home Screen (Overlaid on dynamic 3D Backrooms Lobby) -->
+  <!-- 3D Home Screen (Overlaid on dynamic 3D School Corridor) -->
   <div class="modal-screen" id="titleScreen">
     <div class="home-card">
-      <h1 class="game-logo">THE BACKROOMS</h1>
-      <p class="game-sub">〜 深夜の迷路脱出 (Roblox-Style Horror) 〜</p>
+      <h1 class="game-logo">KOWAKOWA</h1>
+      <p class="game-sub">〜 夜の旧木造校舎からの脱出 (全5ステージ迷路) 〜</p>
 
-      <div id="homeDeathToast">☠️ バケモノに追いつかれた…… 再挑戦してください！</div>
+      <div id="homeDeathToast">☠️ バケモノに追いつかれた…… 最初から再挑戦！</div>
 
       <!-- Character Appearance Customizer -->
       <div class="customizer-box">
         <div class="customizer-header">
           <span>🎨 キャラの見た目カスタマイズ</span>
-          <span style="font-size: 0.72rem; color: #888;">ロブロックス風アバター</span>
+          <span style="font-size: 0.72rem; color: #aaa;">ロブロックス風アバター</span>
         </div>
 
         <!-- Shirt Color -->
         <div class="customizer-row">
-          <span class="customizer-label">シャツの色:</span>
+          <span class="customizer-label">服の色:</span>
           <div class="color-swatches" id="shirtSwatches">
             <div class="color-swatch active" data-color="#e74c3c" style="background: #e74c3c;"></div>
             <div class="color-swatch" data-color="#3498db" style="background: #3498db;"></div>
@@ -862,14 +964,14 @@
       </div>
 
       <!-- Item Selection -->
-      <div style="font-size: 0.84rem; font-weight: 700; margin-bottom: 6px; color: #f1c40f; text-align: left;">
+      <div style="font-size: 0.84rem; font-weight: 700; margin-bottom: 6px; color: #f39c12; text-align: left;">
         ① 装備アイテムを選択
       </div>
       <div class="item-select-grid">
         <div class="item-select-card selected" data-item="flashlight">
           <div class="item-card-icon">🔦</div>
           <div class="item-card-name">懐中電灯</div>
-          <div class="item-card-desc">[1]キーで手に持つと迷路の前方を明るく照射。</div>
+          <div class="item-card-desc">[1]キーで点灯/消灯。暗い旧校舎を照らす。</div>
         </div>
         <div class="item-select-card" data-item="bandage">
           <div class="item-card-icon">🩹</div>
@@ -885,10 +987,10 @@
 
       <!-- Player Name Input -->
       <div class="input-row">
-        <input type="text" class="text-input" id="playerNameInput" placeholder="プレイヤー名を入力..." value="生存者1">
+        <input type="text" class="text-input" id="playerNameInput" placeholder="プレイヤー名を入力..." value="生徒1">
       </div>
 
-      <!-- Primary Buttons requested by user: 「一人でプレイ」「ロビーを作る」 -->
+      <!-- Primary Buttons: 「一人でプレイ」「ロビーを作る」 -->
       <div class="primary-actions-grid">
         <button class="btn-solo" id="soloStartBtn">▶ 一人でプレイ</button>
         <button class="btn-create-lobby" id="createRoomBtn">🏠 ロビーを作る</button>
@@ -901,11 +1003,13 @@
       </div>
 
       <div class="rules-box">
-        <strong>⚠️ 生存の手引き（2種類のバケモノ）：</strong><br>
-        ・<strong>【黒色に3回点滅】</strong>したら影のバケモノ！近くの<strong>ベッド下【E】</strong>に潜り込め！<br>
-        ・<strong>【赤色に3回点滅】</strong>したら死神バケモノ！頭上を薙ぎ払うので<strong>しゃがめ【C】</strong>！<br>
-        ・<strong>【ジャンプ【Space】】</strong>で障害物を飛び越え可能。<br>
-        ・黄色い迷路の奥深くにある<strong>【緑色の非常口ドア】</strong>を見つけて脱出せよ！
+        <strong>⚠️ こわこわ旧校舎 脱出の手引き（全5ステージ迷路）：</strong><br>
+        ・ステージをクリアする毎に前ステージは完全消去され、次の迷路へ進みます！<br>
+        ・<strong>【黒色に3回点滅】</strong>（停電）→ 机下・ロッカー・保健室ベッドに<strong>隠れろ【E】</strong>！<br>
+        ・<strong>【赤色に3回点滅】</strong>（首刈り）→ 頭上を薙ぎ払う鎌を避けるため<strong>しゃがめ【C】</strong>！<br>
+        ・<strong>【青色に3回点滅】</strong>（床怨霊）→ 床を這う影を<strong>ジャンプ【Space】</strong>で跳び越えろ！<br>
+        ・<strong>【紫色に3回点滅】</strong>（呪い人形）→ 光に突進してくるため<strong>懐中電灯を消せ【1】</strong>！<br>
+        ・第5ステージ最深部の【光の正門】へ到達すれば脱出成功！
       </div>
     </div>
   </div>
@@ -917,11 +1021,11 @@
       
       <div class="code-badge-container">
         <span>部屋コード:</span>
-        <strong id="roomCodeDisplay" style="color: #f1c40f; font-size: 1.25rem;">#----</strong>
+        <strong id="roomCodeDisplay" style="color: #f39c12; font-size: 1.25rem;">#----</strong>
         <button class="btn-copy" id="copyCodeBtn">📋 コピー</button>
       </div>
 
-      <p style="font-size: 0.85rem; color: #ccc;">友達にこの部屋コードを教えて合流してください（最大4人・同一PCタブ間も即座に同期）</p>
+      <p style="font-size: 0.85rem; color: #ccc;">友達にこの部屋コードを教えて合流してください（最大4人・オンラインリアルタイム通信）</p>
 
       <div class="lobby-players-grid" id="partyList">
         <!-- Players inserted via JS -->
@@ -938,8 +1042,9 @@
   <div class="modal-screen" id="clearScreen" style="display: none;">
     <div class="home-card" style="border-color: #2ecc71;">
       <h2 style="font-size: 2.6rem; color: #2ecc71; font-weight: 900; margin-bottom: 10px;">ESCAPED!</h2>
-      <p style="font-size: 1.1rem; color: #ddd; margin-bottom: 25px;">緑の非常ドアを開け、バックルームの迷路から生還した！</p>
-      <button class="btn-solo" id="clearRetryBtn" style="background: #27ae60; width: 100%;">ホーム画面に戻る</button>
+      <p style="font-size: 1.15rem; color: #eee; margin-bottom: 8px;">全5ステージ踏破！夜の旧木造校舎から全員生還した！</p>
+      <p style="font-size: 0.88rem; color: #aaa; margin-bottom: 25px;">影・首刈り鎌・地を這う怨霊・呪い人形の脅威を退け、正門から脱出に成功しました。</p>
+      <button class="btn-solo" id="clearRetryBtn" style="background: #27ae60; width: 100%;">タイトル画面に戻る</button>
     </div>
   </div>
 

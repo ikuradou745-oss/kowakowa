@@ -1,6 +1,8 @@
 import express from 'express';
+import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { WebSocketServer, WebSocket } from 'ws';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -9,19 +11,209 @@ const app = express();
 const PORT = 3000;
 const HOST = '0.0.0.0';
 
-// Serve static files from the root directory
+app.use(express.json());
 app.use(express.static(__dirname));
 
-// Health check endpoint
+// In-memory room storage for instant online multiplayer
+const rooms = new Map(); // roomCode -> { code, hostId, gameState: 'lobby'|'playing', currentStage: 1, players: Map<id, player>, sockets: Set<ws> }
+
+function generateRoomCode() {
+  let code;
+  do {
+    code = Math.floor(1000 + Math.random() * 9000).toString();
+  } while (rooms.has(code));
+  return code;
+}
+
+function broadcastToRoom(roomCode, message, senderWs = null) {
+  const room = rooms.get(roomCode);
+  if (!room) return;
+  const payload = JSON.stringify(message);
+  for (const client of room.sockets) {
+    if (client.readyState === WebSocket.OPEN && client !== senderWs) {
+      try { client.send(payload); } catch (e) {}
+    }
+  }
+}
+
+function broadcastToAllInRoom(roomCode, message) {
+  const room = rooms.get(roomCode);
+  if (!room) return;
+  const payload = JSON.stringify(message);
+  for (const client of room.sockets) {
+    if (client.readyState === WebSocket.OPEN) {
+      try { client.send(payload); } catch (e) {}
+    }
+  }
+}
+
+function getRoomSnapshot(room) {
+  const playersObj = {};
+  for (const [id, p] of room.players.entries()) {
+    playersObj[id] = p;
+  }
+  return {
+    code: room.code,
+    hostId: room.hostId,
+    gameState: room.gameState,
+    currentStage: room.currentStage,
+    players: playersObj
+  };
+}
+
+// REST fallback APIs
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', app: 'kowakowa' });
+  res.json({ status: 'ok', app: 'kowakowa', activeRooms: rooms.size });
 });
 
-// Fallback to index.html for SPA/client routing
+app.get('/api/rooms/:code', (req, res) => {
+  const room = rooms.get(req.params.code);
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+  res.json(getRoomSnapshot(room));
+});
+
+// Fallback to index.html for client routing
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-app.listen(PORT, HOST, () => {
-  console.log(`[kowakowa] Server running on http://${HOST}:${PORT}`);
+const server = http.createServer(app);
+
+// Real-time WebSocket Server
+const wss = new WebSocketServer({ server });
+
+wss.on('connection', (ws) => {
+  let clientRoomCode = null;
+  let clientPlayerId = null;
+
+  ws.on('message', (raw) => {
+    try {
+      const msg = JSON.parse(raw.toString());
+      const { type, payload } = msg;
+
+      if (type === 'CREATE_ROOM') {
+        const code = generateRoomCode();
+        clientRoomCode = code;
+        clientPlayerId = payload.playerId;
+
+        const room = {
+          code,
+          hostId: payload.playerId,
+          gameState: 'lobby',
+          currentStage: 1,
+          players: new Map(),
+          sockets: new Set([ws])
+        };
+
+        room.players.set(payload.playerId, {
+          id: payload.playerId,
+          name: payload.name || '生徒',
+          item: payload.item || 'flashlight',
+          customization: payload.customization || {},
+          isHost: true,
+          x: 0,
+          y: 1.6,
+          z: 0,
+          rotation: 0,
+          isHidden: false,
+          isCrouching: false,
+          isDead: false
+        });
+
+        rooms.set(code, room);
+        ws.send(JSON.stringify({ type: 'ROOM_CREATED', payload: getRoomSnapshot(room) }));
+      } else if (type === 'JOIN_ROOM') {
+        const code = (payload.code || '').trim();
+        const room = rooms.get(code);
+        if (!room) {
+          return ws.send(JSON.stringify({ type: 'ERROR', payload: { message: '部屋が見つかりません' } }));
+        }
+        if (room.players.size >= 4) {
+          return ws.send(JSON.stringify({ type: 'ERROR', payload: { message: '部屋が満員です（最大4人）' } }));
+        }
+
+        clientRoomCode = code;
+        clientPlayerId = payload.playerId;
+        room.sockets.add(ws);
+
+        room.players.set(payload.playerId, {
+          id: payload.playerId,
+          name: payload.name || '生徒',
+          item: payload.item || 'flashlight',
+          customization: payload.customization || {},
+          isHost: false,
+          x: 0,
+          y: 1.6,
+          z: 0,
+          rotation: 0,
+          isHidden: false,
+          isCrouching: false,
+          isDead: false
+        });
+
+        ws.send(JSON.stringify({ type: 'ROOM_JOINED', payload: getRoomSnapshot(room) }));
+        broadcastToRoom(code, { type: 'ROOM_UPDATE', payload: getRoomSnapshot(room) }, ws);
+      } else if (type === 'START_GAME') {
+        if (!clientRoomCode) return;
+        const room = rooms.get(clientRoomCode);
+        if (room && room.hostId === clientPlayerId) {
+          room.gameState = 'playing';
+          room.currentStage = 1;
+          broadcastToAllInRoom(clientRoomCode, { type: 'GAME_STARTED', payload: getRoomSnapshot(room) });
+        }
+      } else if (type === 'STAGE_CLEAR') {
+        if (!clientRoomCode) return;
+        const room = rooms.get(clientRoomCode);
+        if (room) {
+          const nextStage = (room.currentStage || 1) + 1;
+          room.currentStage = nextStage;
+          broadcastToAllInRoom(clientRoomCode, { type: 'NEXT_STAGE', payload: { nextStage } });
+        }
+      } else if (type === 'PLAYER_MOVE') {
+        if (!clientRoomCode || !clientPlayerId) return;
+        const room = rooms.get(clientRoomCode);
+        if (room && room.players.has(clientPlayerId)) {
+          const p = room.players.get(clientPlayerId);
+          Object.assign(p, payload);
+          broadcastToRoom(clientRoomCode, { type: 'PLAYER_MOVED', payload: { id: clientPlayerId, ...payload } }, ws);
+        }
+      } else if (type === 'UPDATE_CUSTOM') {
+        if (!clientRoomCode || !clientPlayerId) return;
+        const room = rooms.get(clientRoomCode);
+        if (room && room.players.has(clientPlayerId)) {
+          const p = room.players.get(clientPlayerId);
+          p.customization = payload.customization;
+          broadcastToRoom(clientRoomCode, { type: 'ROOM_UPDATE', payload: getRoomSnapshot(room) });
+        }
+      }
+    } catch (e) {
+      console.error('[WS Error]', e);
+    }
+  });
+
+  ws.on('close', () => {
+    if (clientRoomCode && rooms.has(clientRoomCode)) {
+      const room = rooms.get(clientRoomCode);
+      room.sockets.delete(ws);
+      if (clientPlayerId) {
+        room.players.delete(clientPlayerId);
+      }
+      if (room.players.size === 0) {
+        rooms.delete(clientRoomCode);
+      } else {
+        // Transfer host if host left
+        if (room.hostId === clientPlayerId) {
+          const firstPlayerId = room.players.keys().next().value;
+          room.hostId = firstPlayerId;
+          const newHost = room.players.get(firstPlayerId);
+          if (newHost) newHost.isHost = true;
+        }
+        broadcastToAllInRoom(clientRoomCode, { type: 'ROOM_UPDATE', payload: getRoomSnapshot(room) });
+      }
+    }
+  });
+});
+
+server.listen(PORT, HOST, () => {
+  console.log(`[kowakowa] School Horror Server running on http://${HOST}:${PORT}`);
 });

@@ -1,48 +1,4 @@
-// Bulletproof Multiplayer Room Manager (Firestore + Multi-tab BroadcastChannel & LocalStorage)
-import { initializeApp } from "firebase/app";
-import { 
-  getFirestore, 
-  doc, 
-  setDoc, 
-  getDoc, 
-  updateDoc, 
-  onSnapshot, 
-  deleteDoc 
-} from "firebase/firestore";
-import { getAuth, signInAnonymously } from "firebase/auth";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyDqhonMCcb-Rx1mLm66v0y7vxmzxeaXoBE",
-  authDomain: "rpgs-fa193.firebaseapp.com",
-  projectId: "rpgs-fa193",
-  storageBucket: "rpgs-fa193.firebasestorage.app",
-  messagingSenderId: "682394810498",
-  appId: "1:682394810498:web:acce61ef8ad7479dc6dc9b"
-};
-
-let app = null;
-let db = null;
-let auth = null;
-let isConnected = false;
-
-try {
-  app = initializeApp(firebaseConfig);
-  db = getFirestore(app);
-  auth = getAuth(app);
-  // Attempt non-blocking anonymous sign-in
-  signInAnonymously(auth).then(() => {
-    isConnected = true;
-    console.log("[Firebase] Anonymous auth ready, Firestore online");
-  }).catch((err) => {
-    console.warn("[Firebase] Auth notice (local sync fallback ready):", err?.message);
-    isConnected = !!db;
-  });
-} catch (err) {
-  console.warn("[Firebase] Init error (using cross-tab sync):", err);
-}
-
-export { app, db, isConnected };
-
+// High-Performance Real-Time WebSocket & Fallback Room Manager
 export class RoomManager {
   constructor(localPlayerId, localPlayerName) {
     this.playerId = localPlayerId;
@@ -50,304 +6,258 @@ export class RoomManager {
     this.roomCode = null;
     this.isHost = false;
     this.onRoomUpdate = null;
+    this.onGameStart = null;
+    this.onNextStage = null;
+    this.onPlayerMove = null;
     this.roomData = null;
+    this.ws = null;
+    this.isConnected = false;
 
-    // Cross-tab broadcast channel for instant zero-latency party sync
-    this.channel = null;
+    // Cross-tab broadcast fallback
     try {
-      this.channel = new BroadcastChannel('kowakowa_party_channel');
-      this.channel.onmessage = (event) => this.handleChannelMessage(event.data);
+      this.channel = new BroadcastChannel('kowakowa_school_party');
+      this.channel.onmessage = (e) => this.handleChannelMessage(e.data);
     } catch (e) {
-      console.warn('BroadcastChannel not supported');
+      this.channel = null;
     }
 
-    // LocalStorage storage-event listener for cross-tab sync fallback
-    window.addEventListener('storage', (e) => {
-      if (this.roomCode && e.key === `kowakowa_room_${this.roomCode}` && e.newValue) {
+    this.connectWs();
+  }
+
+  connectWs() {
+    try {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}`;
+      this.ws = new WebSocket(wsUrl);
+
+      this.ws.onopen = () => {
+        this.isConnected = true;
+      };
+
+      this.ws.onmessage = (event) => {
         try {
-          const parsed = JSON.parse(e.newValue);
-          this.handleIncomingRoomData(parsed);
-        } catch (err) {}
-      }
+          const msg = JSON.parse(event.data);
+          this.handleServerMessage(msg);
+        } catch (e) {}
+      };
+
+      this.ws.onclose = () => {
+        this.isConnected = false;
+        // Auto-reconnect after 2 seconds if still in room
+        setTimeout(() => {
+          if (this.roomCode) this.connectWs();
+        }, 2000);
+      };
+    } catch (e) {
+      console.warn('[WS] Fallback to cross-tab channel');
+    }
+  }
+
+  handleServerMessage(msg) {
+    const { type, payload } = msg;
+
+    if (type === 'ROOM_CREATED') {
+      this.roomCode = payload.code;
+      this.isHost = true;
+      this.roomData = payload;
+      if (this.onRoomUpdate) this.onRoomUpdate(payload);
+    } else if (type === 'ROOM_JOINED') {
+      this.roomCode = payload.code;
+      this.isHost = (payload.hostId === this.playerId);
+      this.roomData = payload;
+      if (this.onRoomUpdate) this.onRoomUpdate(payload);
+    } else if (type === 'ROOM_UPDATE') {
+      this.roomData = payload;
+      if (this.onRoomUpdate) this.onRoomUpdate(payload);
+    } else if (type === 'GAME_STARTED') {
+      this.roomData = payload;
+      if (this.onGameStart) this.onGameStart(payload);
+    } else if (type === 'NEXT_STAGE') {
+      if (this.onNextStage) this.onNextStage(payload.nextStage);
+    } else if (type === 'PLAYER_MOVED') {
+      if (this.onPlayerMove) this.onPlayerMove(payload.id, payload);
+    } else if (type === 'ERROR') {
+      alert(payload.message || 'エラーが発生しました');
+    }
+  }
+
+  handleChannelMessage(data) {
+    if (!data || data.roomCode !== this.roomCode) return;
+    if (data.type === 'START' && this.onGameStart) {
+      this.onGameStart(data);
+    } else if (data.type === 'STAGE_CLEAR' && this.onNextStage) {
+      this.onNextStage(data.nextStage);
+    } else if (data.type === 'MOVE' && this.onPlayerMove) {
+      this.onPlayerMove(data.id, data);
+    }
+  }
+
+  async createRoom(item, customization) {
+    const waitPromise = new Promise((resolve) => {
+      const check = setInterval(() => {
+        if (this.roomCode) {
+          clearInterval(check);
+          resolve(this.roomCode);
+        }
+      }, 50);
+      // Timeout fallback
+      setTimeout(() => {
+        clearInterval(check);
+        if (!this.roomCode) {
+          this.roomCode = Math.floor(1000 + Math.random() * 9000).toString();
+          this.isHost = true;
+          this.roomData = {
+            code: this.roomCode,
+            hostId: this.playerId,
+            gameState: 'lobby',
+            currentStage: 1,
+            players: {
+              [this.playerId]: {
+                id: this.playerId,
+                name: this.playerName,
+                item,
+                customization,
+                isHost: true
+              }
+            }
+          };
+          resolve(this.roomCode);
+        }
+      }, 1000);
     });
 
-    this.firestoreUnsubscribe = null;
-  }
-
-  generateCode() {
-    return Math.floor(1000 + Math.random() * 9000).toString();
-  }
-
-  // Handle cross-tab incoming broadcast message
-  handleChannelMessage(msg) {
-    if (!msg || !this.roomCode || msg.roomCode !== this.roomCode) return;
-    if (msg.type === 'ROOM_UPDATE' && msg.data) {
-      this.handleIncomingRoomData(msg.data);
-    } else if (msg.type === 'START_GAME') {
-      if (this.roomData) this.roomData.gameState = 'playing';
-      if (this.onRoomUpdate) this.onRoomUpdate(this.roomData);
-    } else if (msg.type === 'PLAYER_MOVE') {
-      if (this.roomData && this.roomData.players && msg.playerId !== this.playerId) {
-        if (!this.roomData.players[msg.playerId]) {
-          this.roomData.players[msg.playerId] = {};
-        }
-        Object.assign(this.roomData.players[msg.playerId], msg.pos);
-        if (this.onRoomUpdate) this.onRoomUpdate(this.roomData);
-      }
-    }
-  }
-
-  handleIncomingRoomData(data) {
-    this.roomData = data;
-    if (this.onRoomUpdate) {
-      this.onRoomUpdate(data);
-    }
-  }
-
-  broadcastLocal(type, payload = {}) {
-    const message = {
-      roomCode: this.roomCode,
-      playerId: this.playerId,
-      type,
-      ...payload
-    };
-    if (this.channel) {
-      try { this.channel.postMessage(message); } catch (e) {}
-    }
-  }
-
-  saveToStorage(data) {
-    if (!this.roomCode) return;
-    try {
-      localStorage.setItem(`kowakowa_room_${this.roomCode}`, JSON.stringify(data));
-    } catch (e) {}
-  }
-
-  loadFromStorage(code) {
-    try {
-      const item = localStorage.getItem(`kowakowa_room_${code}`);
-      return item ? JSON.parse(item) : null;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  // Create room (Instant, never hangs or throws)
-  async createRoom(itemChoice, customization = {}) {
-    this.roomCode = this.generateCode();
-    this.isHost = true;
-
-    const initialData = {
-      roomCode: this.roomCode,
-      createdAt: Date.now(),
-      hostId: this.playerId,
-      gameState: "lobby",
-      players: {
-        [this.playerId]: {
-          id: this.playerId,
-          name: this.playerName,
-          item: itemChoice,
-          customization,
-          isHost: true,
-          x: 0,
-          z: 0,
-          y: 0,
-          rotation: 0,
-          isDead: false,
-          isHidden: false,
-          isCrouching: false,
-          lastUpdated: Date.now()
-        }
+    const sendCreate = () => {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({
+          type: 'CREATE_ROOM',
+          payload: {
+            playerId: this.playerId,
+            name: this.playerName,
+            item,
+            customization
+          }
+        }));
       }
     };
 
-    this.roomData = initialData;
-    this.saveToStorage(initialData);
-    this.broadcastLocal('ROOM_UPDATE', { data: initialData });
-
-    // Also attempt Firestore registration asynchronously in background
-    if (db) {
-      this.saveToFirestoreAsync(initialData);
-      this.listenToFirestore();
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      sendCreate();
+    } else {
+      setTimeout(sendCreate, 200);
     }
 
-    return this.roomCode;
+    return waitPromise;
   }
 
-  async saveToFirestoreAsync(data) {
-    try {
-      const roomRef = doc(db, "kowakowa_rooms", this.roomCode);
-      await Promise.race([
-        setDoc(roomRef, data),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
-      ]);
-      console.log("[RoomManager] Room persisted to Firestore:", this.roomCode);
-    } catch (e) {
-      console.log("[RoomManager] Firestore sync notice (Local/P2P channel active):", e.message);
-    }
-  }
-
-  // Join room (Checks local tab storage first, then Firestore)
-  async joinRoom(code, itemChoice, customization = {}) {
-    const targetCode = code.trim().replace('#', '');
-    this.roomCode = targetCode;
-    this.isHost = false;
-
-    let existingData = this.loadFromStorage(targetCode);
-
-    if (!existingData && db) {
-      try {
-        const roomRef = doc(db, "kowakowa_rooms", targetCode);
-        const snap = await Promise.race([
-          getDoc(roomRef),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2500))
-        ]);
-        if (snap && snap.exists()) {
-          existingData = snap.data();
+  async joinRoom(code, item, customization) {
+    this.roomCode = code;
+    return new Promise((resolve, reject) => {
+      const onJoined = (msg) => {
+        if (msg.type === 'ROOM_JOINED') {
+          resolve(msg.payload);
+        } else if (msg.type === 'ERROR') {
+          reject(new Error(msg.payload.message));
         }
-      } catch (err) {
-        console.warn("[RoomManager] Firestore fetch failed/timed out:", err);
-      }
-    }
-
-    if (!existingData) {
-      // If not yet saved or on separate window, create a joined state
-      existingData = {
-        roomCode: targetCode,
-        createdAt: Date.now(),
-        hostId: 'host',
-        gameState: 'lobby',
-        players: {}
       };
-    }
 
-    const currentPlayers = existingData.players || {};
-    if (Object.keys(currentPlayers).length >= 4) {
-      throw new Error("部屋が満員です（最大4人まで）");
-    }
+      const originalHandler = this.onRoomUpdate;
+      this.onRoomUpdate = (data) => {
+        if (originalHandler) originalHandler(data);
+        resolve(data);
+      };
 
-    currentPlayers[this.playerId] = {
-      id: this.playerId,
-      name: this.playerName,
-      item: itemChoice,
-      customization,
-      isHost: false,
-      x: 0,
-      z: 0,
-      y: 0,
-      rotation: 0,
-      isDead: false,
-      isHidden: false,
-      isCrouching: false,
-      lastUpdated: Date.now()
-    };
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({
+          type: 'JOIN_ROOM',
+          payload: {
+            code,
+            playerId: this.playerId,
+            name: this.playerName,
+            item,
+            customization
+          }
+        }));
+      } else {
+        reject(new Error("接続中... 少々お待ちください"));
+      }
 
-    existingData.players = currentPlayers;
-    this.roomData = existingData;
-    this.saveToStorage(existingData);
-    this.broadcastLocal('ROOM_UPDATE', { data: existingData });
-
-    if (db) {
-      try {
-        const roomRef = doc(db, "kowakowa_rooms", targetCode);
-        updateDoc(roomRef, { players: currentPlayers }).catch(() => {});
-      } catch (e) {}
-      this.listenToFirestore();
-    }
-
-    return true;
-  }
-
-  listenToFirestore() {
-    if (!db || !this.roomCode) return;
-    try {
-      const roomRef = doc(db, "kowakowa_rooms", this.roomCode);
-      this.firestoreUnsubscribe = onSnapshot(roomRef, (docSnap) => {
-        if (docSnap.exists()) {
-          const cloudData = docSnap.data();
-          this.handleIncomingRoomData(cloudData);
+      setTimeout(() => {
+        if (!this.roomData) {
+          // Local fallback join
+          this.roomData = {
+            code,
+            hostId: 'other',
+            gameState: 'lobby',
+            currentStage: 1,
+            players: {
+              [this.playerId]: {
+                id: this.playerId,
+                name: this.playerName,
+                item,
+                customization,
+                isHost: false
+              }
+            }
+          };
+          resolve(this.roomData);
         }
-      }, () => {});
-    } catch (e) {}
+      }, 1500);
+    });
   }
 
-  // Update real-time player position & animations
-  updatePosition(x, z, y, rotation, isHidden, isDead, isCrouching) {
-    if (!this.roomCode) return;
-
-    const pos = {
-      x: Math.round(x * 100) / 100,
-      z: Math.round(z * 100) / 100,
-      y: Math.round(y * 100) / 100,
-      rotation: Math.round(rotation * 100) / 100,
-      isHidden,
-      isDead,
-      isCrouching,
-      lastUpdated: Date.now()
-    };
-
-    if (this.roomData && this.roomData.players && this.roomData.players[this.playerId]) {
-      Object.assign(this.roomData.players[this.playerId], pos);
-    }
-
-    // Broadcast position update to other players instantly
-    this.broadcastLocal('PLAYER_MOVE', { playerId: this.playerId, pos });
-
-    // Throttle firestore updates
-    if (db && (!this._lastCloudSync || Date.now() - this._lastCloudSync > 600)) {
-      this._lastCloudSync = Date.now();
-      try {
-        const roomRef = doc(db, "kowakowa_rooms", this.roomCode);
-        updateDoc(roomRef, {
-          [`players.${this.playerId}.x`]: pos.x,
-          [`players.${this.playerId}.z`]: pos.z,
-          [`players.${this.playerId}.y`]: pos.y,
-          [`players.${this.playerId}.rotation`]: pos.rotation,
-          [`players.${this.playerId}.isHidden`]: pos.isHidden,
-          [`players.${this.playerId}.isDead`]: pos.isDead,
-          [`players.${this.playerId}.isCrouching`]: pos.isCrouching,
-          [`players.${this.playerId}.lastUpdated`]: pos.lastUpdated
-        }).catch(() => {});
-      } catch (e) {}
-    }
-  }
-
-  // Update player customization
-  updateCustomization(customization) {
-    if (this.roomData && this.roomData.players && this.roomData.players[this.playerId]) {
-      this.roomData.players[this.playerId].customization = customization;
-      this.saveToStorage(this.roomData);
-      this.broadcastLocal('ROOM_UPDATE', { data: this.roomData });
-    }
-  }
-
-  // Start Party Game (Host starts for everyone)
   startPartyGame() {
-    if (!this.roomCode) return;
-    if (this.roomData) {
-      this.roomData.gameState = 'playing';
-      this.saveToStorage(this.roomData);
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        type: 'START_GAME',
+        payload: { roomCode: this.roomCode }
+      }));
     }
-    this.broadcastLocal('START_GAME', {});
+    if (this.channel) {
+      this.channel.postMessage({ type: 'START', roomCode: this.roomCode });
+    }
+  }
 
-    if (db) {
-      try {
-        const roomRef = doc(db, "kowakowa_rooms", this.roomCode);
-        updateDoc(roomRef, { gameState: "playing" }).catch(() => {});
-      } catch (e) {}
+  notifyStageClear(nextStage) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        type: 'STAGE_CLEAR',
+        payload: { roomCode: this.roomCode, nextStage }
+      }));
+    }
+    if (this.channel) {
+      this.channel.postMessage({ type: 'STAGE_CLEAR', roomCode: this.roomCode, nextStage });
+    }
+  }
+
+  updatePosition(x, z, y, rotation, isHidden, isDead, isCrouching, currentStage) {
+    if (!this.roomCode) return;
+    const payload = { x, z, y, rotation, isHidden, isDead, isCrouching, currentStage };
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        type: 'PLAYER_MOVE',
+        payload
+      }));
+    }
+    if (this.channel) {
+      this.channel.postMessage({ type: 'MOVE', roomCode: this.roomCode, id: this.playerId, ...payload });
+    }
+  }
+
+  updateCustomization(customization) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        type: 'UPDATE_CUSTOM',
+        payload: { customization }
+      }));
     }
   }
 
   leaveRoom() {
-    if (this.firestoreUnsubscribe) {
-      this.firestoreUnsubscribe();
-      this.firestoreUnsubscribe = null;
-    }
-    if (this.roomData && this.roomData.players) {
-      delete this.roomData.players[this.playerId];
-      this.saveToStorage(this.roomData);
-      this.broadcastLocal('ROOM_UPDATE', { data: this.roomData });
-    }
     this.roomCode = null;
+    this.isHost = false;
+    this.roomData = null;
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.close();
+    }
   }
 }
