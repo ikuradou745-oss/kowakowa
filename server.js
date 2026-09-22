@@ -1,6 +1,8 @@
 import express from 'express';
 import http from 'http';
 import path from 'path';
+import fs from 'fs';
+import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { WebSocketServer, WebSocket } from 'ws';
 
@@ -11,7 +13,33 @@ const app = express();
 const PORT = 3000;
 const HOST = '0.0.0.0';
 
+function ensureGameBundle() {
+  const bundlePath = path.join(__dirname, 'game.js');
+  if (!fs.existsSync(bundlePath)) {
+    console.log('[kowakowa] game.js not found. Bundling src/main.js with esbuild...');
+    try {
+      execSync('npx esbuild src/main.js --bundle --outfile=game.js --format=esm', {
+        cwd: __dirname,
+        stdio: 'inherit'
+      });
+      console.log('[kowakowa] Successfully bundled game.js');
+    } catch (e) {
+      console.error('[kowakowa] Failed to build game.js:', e);
+    }
+  }
+}
+ensureGameBundle();
+
 app.use(express.json());
+
+// Enable CORS so client can connect from any origin (including GitHub Pages)
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
 
 // Never cache index.html or game.js so client always loads fresh code
 app.use((req, res, next) => {
@@ -25,6 +53,19 @@ app.use((req, res, next) => {
 
 // Explicit favicon handler returning 204 No Content so it never produces 404
 app.get('/favicon.ico', (req, res) => res.status(204).end());
+
+// Explicit game.js handler ensuring the bundle exists and is served with proper content-type
+app.get('/game.js', (req, res) => {
+  ensureGameBundle();
+  const bundlePath = path.join(__dirname, 'game.js');
+  if (fs.existsSync(bundlePath)) {
+    res.setHeader('Content-Type', 'application/javascript; charset=UTF-8');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.sendFile(bundlePath);
+  } else {
+    res.status(500).send('console.error("game.js bundle failed to build");');
+  }
+});
 
 app.use(express.static(__dirname));
 
@@ -198,6 +239,26 @@ wss.on('connection', (ws) => {
           const p = room.players.get(clientPlayerId);
           p.customization = payload.customization;
           broadcastToRoom(clientRoomCode, { type: 'ROOM_UPDATE', payload: getRoomSnapshot(room) });
+        }
+      } else if (type === 'LEAVE_ROOM') {
+        if (clientRoomCode && rooms.has(clientRoomCode)) {
+          const room = rooms.get(clientRoomCode);
+          room.sockets.delete(ws);
+          if (clientPlayerId) {
+            room.players.delete(clientPlayerId);
+          }
+          if (room.players.size === 0) {
+            rooms.delete(clientRoomCode);
+          } else {
+            if (room.hostId === clientPlayerId) {
+              const firstPlayerId = room.players.keys().next().value;
+              room.hostId = firstPlayerId;
+              const newHost = room.players.get(firstPlayerId);
+              if (newHost) newHost.isHost = true;
+            }
+            broadcastToAllInRoom(clientRoomCode, { type: 'ROOM_UPDATE', payload: getRoomSnapshot(room) });
+          }
+          clientRoomCode = null;
         }
       }
     } catch (e) {

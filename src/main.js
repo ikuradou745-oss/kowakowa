@@ -663,6 +663,15 @@ function boot() {
     setupEventListeners();
     setupCustomizerUI();
 
+    // Pre-connect RoomManager in background for instant online lobby creation
+    try {
+      if (!roomManager) {
+        roomManager = new RoomManager(localPlayerId, localPlayerName);
+      }
+    } catch (e) {
+      console.warn('[Kowakowa] RoomManager pre-connect skipped:', e);
+    }
+
     // Animation Loop
     let lastTime = performance.now();
     function animate(now) {
@@ -1776,6 +1785,20 @@ function setupEventListeners() {
     else toggleSlot1();
   });
 
+  function getOrCreateRoomManager() {
+    const inputVal = document.getElementById('playerNameInput') ? document.getElementById('playerNameInput').value.trim() : '';
+    localPlayerName = inputVal || localPlayerName;
+    if (!roomManager) {
+      roomManager = new RoomManager(localPlayerId, localPlayerName);
+    } else {
+      roomManager.playerName = localPlayerName;
+      if (!roomManager.ws || roomManager.ws.readyState === WebSocket.CLOSED) {
+        roomManager.connectWs();
+      }
+    }
+    return roomManager;
+  }
+
   // Solo & Online Lobby buttons
   document.getElementById('soloStartBtn').addEventListener('click', () => {
     sound.init();
@@ -1783,28 +1806,42 @@ function setupEventListeners() {
     startSoloGame();
   });
 
-  document.getElementById('createRoomBtn').addEventListener('click', async () => {
+  const createRoomBtn = document.getElementById('createRoomBtn');
+  createRoomBtn.addEventListener('click', async () => {
     sound.init();
-    localPlayerName = document.getElementById('playerNameInput').value.trim() || localPlayerName;
-    roomManager = new RoomManager(localPlayerId, localPlayerName);
-    const code = await roomManager.createRoom(selectedItem, characterCustomization);
-    openLobby(code, true);
+    createRoomBtn.disabled = true;
+    createRoomBtn.textContent = '部屋を作成中...';
+    try {
+      const mgr = getOrCreateRoomManager();
+      const code = await mgr.createRoom(selectedItem, characterCustomization);
+      openLobby(code, true);
+    } catch (err) {
+      showGameToast(err.message ? `❌ ${err.message}` : "❌ 部屋の作成に失敗しました");
+    } finally {
+      createRoomBtn.disabled = false;
+      createRoomBtn.textContent = '🚪 部屋を作成';
+    }
   });
 
-  document.getElementById('joinRoomBtn').addEventListener('click', async () => {
+  const joinRoomBtn = document.getElementById('joinRoomBtn');
+  joinRoomBtn.addEventListener('click', async () => {
     sound.init();
     const code = document.getElementById('joinCodeInput').value.trim();
     if (!code) {
       showGameToast("⚠️ 部屋コード（4桁）を入力してください");
       return;
     }
-    localPlayerName = document.getElementById('playerNameInput').value.trim() || localPlayerName;
-    roomManager = new RoomManager(localPlayerId, localPlayerName);
+    joinRoomBtn.disabled = true;
+    joinRoomBtn.textContent = '参加中...';
     try {
-      await roomManager.joinRoom(code, selectedItem, characterCustomization);
+      const mgr = getOrCreateRoomManager();
+      await mgr.joinRoom(code, selectedItem, characterCustomization);
       openLobby(code, false);
     } catch (err) {
       showGameToast(err.message ? `❌ ${err.message}` : "❌ 部屋への参加に失敗しました");
+    } finally {
+      joinRoomBtn.disabled = false;
+      joinRoomBtn.textContent = '参加';
     }
   });
 
