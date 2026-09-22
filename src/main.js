@@ -7,8 +7,118 @@ const sound = new SoundEngine();
 let roomManager = null;
 let localPlayerId = 'p_' + Math.random().toString(36).substring(2, 9);
 let localPlayerName = '生徒_' + Math.floor(100 + Math.random() * 900);
-let selectedItem = 'flashlight'; // 'flashlight', 'bandage', 'drink'
+// Items & Shop Definitions
+export const SHOP_ITEMS = [
+  {
+    id: 'bandage',
+    name: '絆創膏',
+    icon: '🩹',
+    price: 0,
+    desc: '襲撃された時、一度だけ身代わりになり生存。初期解放。',
+    tag: '初期装備'
+  },
+  {
+    id: 'drink',
+    name: 'エナドリ',
+    icon: '⚡',
+    price: 0,
+    desc: '8秒間爆速ダッシュ [Q]（60秒CT）。初期解放。',
+    tag: '初期装備'
+  },
+  {
+    id: 'stungun',
+    name: 'スタンガン',
+    icon: '⚡🔫',
+    price: 80,
+    desc: '襲撃してきたバケモノを1回撃退！ [F/クリック]（35秒CT）。',
+    tag: '撃退用'
+  },
+  {
+    id: 'grappler',
+    name: 'グラップラー',
+    icon: '🪝',
+    price: 120,
+    desc: '照準の壁や床へ瞬時に急加速移動！ [クリック/F]（10秒CT）。',
+    tag: '高速移動'
+  },
+  {
+    id: 'flashlight',
+    name: '懐中電灯',
+    icon: '🔦',
+    price: 40,
+    desc: '前方を明るく照らし出す [1]。暗闇を探索。',
+    tag: '視界確保'
+  }
+];
+
+let userPoints = 50; // Initial 50 bonus points
+let unlockedItems = ['bandage', 'drink'];
+let selectedItem = 'bandage';
+let currentMode = 'normal'; // 'normal' (5 stages), 'hard' (15 stages), 'endless' (infinite)
 let isSlot1Held = true;
+let stunGunCooldown = 0;
+let grapplerCooldown = 0;
+
+try {
+  const p = localStorage.getItem('kowakowa_points');
+  if (p !== null) userPoints = Math.max(0, parseInt(p, 10) || 0);
+  const u = localStorage.getItem('kowakowa_unlocked');
+  if (u) {
+    const parsed = JSON.parse(u);
+    if (Array.isArray(parsed)) unlockedItems = parsed;
+  }
+  if (!unlockedItems.includes('bandage')) unlockedItems.push('bandage');
+  if (!unlockedItems.includes('drink')) unlockedItems.push('drink');
+  const eq = localStorage.getItem('kowakowa_equipped');
+  if (eq && unlockedItems.includes(eq)) selectedItem = eq;
+  const md = localStorage.getItem('kowakowa_mode');
+  if (md && ['normal', 'hard', 'endless'].includes(md)) currentMode = md;
+} catch (e) {}
+
+function saveUserData() {
+  try {
+    localStorage.setItem('kowakowa_points', userPoints.toString());
+    localStorage.setItem('kowakowa_unlocked', JSON.stringify(unlockedItems));
+    localStorage.setItem('kowakowa_equipped', selectedItem);
+    localStorage.setItem('kowakowa_mode', currentMode);
+  } catch (e) {}
+}
+
+function addPoints(amount) {
+  userPoints += amount;
+  saveUserData();
+  updatePointsDisplay();
+  showGameToast(`🪙 霊力ポイント +${amount}P 獲得！（合計: ${userPoints}P）`);
+}
+
+function getMaxStages() {
+  if (currentMode === 'normal') return 5;
+  if (currentMode === 'hard') return 15;
+  return Infinity;
+}
+
+// Stage configuration generator for normal, hard, and infinite modes
+function getStageConfig(stageNum) {
+  const titles = [
+    '1階 木造普通教室棟・廊下の迷路',
+    '2階 理科実験棟・標本室・準備室',
+    '3階 音楽室・美術室棟・合唱壇',
+    '別館 旧地下書庫・閉鎖病棟迷路',
+    '最深部 体育館・大講堂・大脱出ゲート'
+  ];
+  const title = titles[(stageNum - 1) % titles.length] + (stageNum > 5 ? ` (${stageNum}F)` : '');
+
+  let allowedMonsters;
+  if (stageNum === 1) allowedMonsters = ['black'];
+  else if (stageNum === 2) allowedMonsters = ['black', 'red'];
+  else if (stageNum === 3) allowedMonsters = ['black', 'red', 'blue'];
+  else allowedMonsters = ['black', 'red', 'blue', 'purple'];
+
+  const baseWait = currentMode === 'hard' ? 12 : 18;
+  const nextWait = Math.max(9, baseWait - Math.min(stageNum * 0.8, 8));
+
+  return { stage: stageNum, title, allowedMonsters, nextWait };
+}
 
 // Character Customization State
 let characterCustomization = {
@@ -27,46 +137,7 @@ try {
 
 // Game Progression State
 let gameState = 'title'; // 'title', 'lobby', 'playing', 'transition', 'cleared'
-let currentStage = 1; // 1 to 5
-const MAX_STAGES = 5;
-
-const STAGE_CONFIGS = [
-  {
-    stage: 1,
-    title: '1階 普通教室・廊下の迷路',
-    monstersText: '出現: ⬛影のバケモノ (隠れろ [E])',
-    allowedMonsters: ['black'],
-    nextWait: 22
-  },
-  {
-    stage: 2,
-    title: '2階 旧特別教室街の迷路',
-    monstersText: '出現: ⬛影 / 🟥首刈り鎌 (しゃがめ [C])',
-    allowedMonsters: ['black', 'red'],
-    nextWait: 19
-  },
-  {
-    stage: 3,
-    title: '3階 理科室・標本室・音楽室の迷路',
-    monstersText: '出現: ⬛影 / 🟥首刈り / 🟦床怨霊 (跳べ [Space])',
-    allowedMonsters: ['black', 'red', 'blue'],
-    nextWait: 17
-  },
-  {
-    stage: 4,
-    title: '渡り廊下と旧地下倉庫の迷路',
-    monstersText: '出現: ⬛影 / 🟥首刈り / 🟦床怨霊 / 🟪呪い人形 (消灯 [1])',
-    allowedMonsters: ['black', 'red', 'blue', 'purple'],
-    nextWait: 15
-  },
-  {
-    stage: 5,
-    title: '最深部 旧講堂・大脱出の迷路 (最終)',
-    monstersText: '出現: 全4種が連続襲撃！正門へ逃げろ！',
-    allowedMonsters: ['black', 'red', 'blue', 'purple'],
-    nextWait: 13
-  }
-];
+let currentStage = 1; // 1 to 5 (or up to 15 or infinite)
 
 // Player State & Physics
 let isHidden = false;
@@ -116,6 +187,10 @@ let blackMonsterGroup, redMonsterGroup, blueMonsterGroup, purpleMonsterGroup;
 
 // Shared Textures (generated once for max performance)
 let woodFloorTexture, woodWallTexture, blackboardTexture, gymFloorTexture, noticeBoardTexture, shoeLockerTexture;
+let labTileFloorTexture, labTileWallTexture;
+let musicParquetFloorTexture, musicVelvetWallTexture;
+let libraryStoneFloorTexture, libraryBrickWallTexture;
+let gymWallTexture;
 
 // Controls
 const keys = { w: false, a: false, s: false, d: false, shift: false };
@@ -123,6 +198,7 @@ let isPointerLocked = false;
 let headBobTimer = 0;
 let footstepTimer = 0;
 let syncTimer = 0;
+let lastPlayerPos = new THREE.Vector3();
 
 // DOM Elements
 const hudElement = document.getElementById('hud');
@@ -134,7 +210,6 @@ const transitionTitle = document.getElementById('transitionTitle');
 const transitionDesc = document.getElementById('transitionDesc');
 const hudStageBadge = document.getElementById('hudStageBadge');
 const hudStageTitle = document.getElementById('hudStageTitle');
-const hudStageMonsters = document.getElementById('hudStageMonsters');
 const interactPrompt = document.getElementById('interactPrompt');
 const warningOverlay = document.getElementById('warningOverlay');
 const jumpscareOverlay = document.getElementById('jumpscareOverlay');
@@ -143,6 +218,10 @@ const stanceIcon = document.getElementById('stanceIcon');
 const stanceText = document.getElementById('stanceText');
 const drinkCooldownBar = document.getElementById('drinkCooldownBar');
 const drinkBtn = document.getElementById('drinkBtn');
+const stungunBtn = document.getElementById('stungunBtn');
+const stungunCooldownBar = document.getElementById('stungunCooldownBar');
+const grapplerBtn = document.getElementById('grapplerBtn');
+const grapplerCooldownBar = document.getElementById('grapplerCooldownBar');
 const hideBtn = document.getElementById('hideBtn');
 const crouchBtn = document.getElementById('crouchBtn');
 const jumpBtn = document.getElementById('jumpBtn');
@@ -156,6 +235,14 @@ const roomCodeDisplay = document.getElementById('roomCodeDisplay');
 const startPartyBtn = document.getElementById('startPartyBtn');
 const leaveLobbyBtn = document.getElementById('leaveLobbyBtn');
 const copyCodeBtn = document.getElementById('copyCodeBtn');
+const userPointsText = document.getElementById('userPointsText');
+const openShopBtn = document.getElementById('openShopBtn');
+const closeShopBtn = document.getElementById('closeShopBtn');
+const shopModal = document.getElementById('shopModal');
+const shopPointsText = document.getElementById('shopPointsText');
+const shopItemsList = document.getElementById('shopItemsList');
+const itemSelectGrid = document.getElementById('itemSelectGrid');
+const modeSelectorTabs = document.getElementById('modeSelectorTabs');
 
 // --- Procedural Japanese Old Wooden School Textures ---
 function createWoodFloorTexture() {
@@ -351,32 +438,257 @@ function createShoeLockerTexture() {
   return new THREE.CanvasTexture(canvas);
 }
 
-// --- Application Bootstrap ---
-window.addEventListener('DOMContentLoaded', () => {
-  initThree();
-  buildFirstPersonFlashlight();
-  buildAllMonsters();
-  loadStage(1);
-  setupEventListeners();
-  setupCustomizerUI();
+// Stage 2: Science Laboratory Linoleum Floor (Checkerboard Sage-Green & Pale Cream)
+function createLabTileFloorTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
 
-  // Animation Loop
-  let lastTime = performance.now();
-  function animate(now) {
-    const dt = Math.min((now - lastTime) / 1000, 0.1);
-    lastTime = now;
+  const tileSize = 64;
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      const isAlt = (r + c) % 2 === 0;
+      ctx.fillStyle = isAlt ? '#456653' : '#d2d8cb';
+      ctx.fillRect(c * tileSize, r * tileSize, tileSize, tileSize);
 
-    if (gameState === 'playing') {
-      updateGame(dt);
-    } else if (gameState === 'title' || gameState === 'lobby') {
-      updateCinematicCamera(now);
+      // Subtle grime / tile edge shadow
+      ctx.strokeStyle = 'rgba(20, 30, 25, 0.35)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(c * tileSize, r * tileSize, tileSize, tileSize);
     }
-
-    renderThree(dt);
-    requestAnimationFrame(animate);
   }
-  requestAnimationFrame(animate);
-});
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  return texture;
+}
+
+// Stage 2: Laboratory Ceramic Wall with Green Dado Rail
+function createLabTileWallTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+
+  // Upper white rectangular tiles
+  ctx.fillStyle = '#e4e8e0';
+  ctx.fillRect(0, 0, 256, 170);
+
+  ctx.strokeStyle = '#b8beaf';
+  ctx.lineWidth = 2;
+  for (let y = 0; y < 170; y += 34) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(256, y);
+    ctx.stroke();
+    const offset = (y / 34 % 2) * 32;
+    for (let x = offset; x < 256; x += 64) {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x, y + 34);
+      ctx.stroke();
+    }
+  }
+
+  // Dark green dado molding bar
+  ctx.fillStyle = '#1e382d';
+  ctx.fillRect(0, 168, 256, 16);
+
+  // Lower dark green wainscot
+  ctx.fillStyle = '#2b4d3e';
+  ctx.fillRect(0, 184, 256, 72);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  return texture;
+}
+
+// Stage 3: Music Room Polished Mahogany Herringbone Parquet
+function createMusicParquetFloorTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#382215';
+  ctx.fillRect(0, 0, 256, 256);
+
+  const h = 32;
+  for (let y = 0; y < 256; y += h) {
+    ctx.fillStyle = (y % (h * 2) === 0) ? '#452b1b' : '#331d11';
+    ctx.fillRect(0, y, 256, h - 2);
+
+    ctx.strokeStyle = '#1d0f08';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, y + h - 1);
+    ctx.lineTo(256, y + h - 1);
+    ctx.stroke();
+
+    for (let x = 0; x < 256; x += 64) {
+      ctx.beginPath();
+      ctx.moveTo(x + (y % 64), y);
+      ctx.lineTo(x + (y % 64), y + h);
+      ctx.stroke();
+    }
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  return texture;
+}
+
+// Stage 3: Music & Art Room Burgundy Acoustic Velvet Wall
+function createMusicVelvetWallTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#3f161c';
+  ctx.fillRect(0, 0, 256, 256);
+
+  // Vertical acoustic fabric strips
+  for (let x = 0; x < 256; x += 32) {
+    ctx.fillStyle = (x % 64 === 0) ? '#4a1b22' : '#391217';
+    ctx.fillRect(x, 0, 30, 256);
+
+    ctx.strokeStyle = '#22080c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, 0, 32, 256);
+  }
+
+  // Polished brass trim molding
+  ctx.fillStyle = '#8a6833';
+  ctx.fillRect(0, 110, 256, 8);
+  ctx.fillRect(0, 220, 256, 36);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  return texture;
+}
+
+// Stage 4: Basement Secret Archive Flagstone Floor
+function createLibraryStoneFloorTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#2f353d';
+  ctx.fillRect(0, 0, 256, 256);
+
+  const stoneH = 48;
+  for (let y = 0; y < 256; y += stoneH) {
+    for (let x = 0; x < 256; x += 64) {
+      const offsetX = (y / stoneH % 2) * 32;
+      ctx.fillStyle = ((x + y) % 3 === 0) ? '#38404a' : '#2b3138';
+      ctx.fillRect(x + offsetX, y, 62, stoneH - 2);
+
+      ctx.strokeStyle = '#181c20';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + offsetX, y, 64, stoneH);
+    }
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  return texture;
+}
+
+// Stage 4: Basement Brick Wall with Mortar
+function createLibraryBrickWallTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#1c1716';
+  ctx.fillRect(0, 0, 256, 256);
+
+  const bh = 24;
+  const bw = 48;
+  for (let y = 0; y < 256; y += bh) {
+    const shift = (y / bh % 2) * (bw / 2);
+    for (let x = -bw; x < 256 + bw; x += bw) {
+      ctx.fillStyle = ((x + y * 2) % 5 === 0) ? '#4f2d24' : '#3d221b';
+      ctx.fillRect(x + shift + 2, y + 2, bw - 4, bh - 4);
+    }
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  return texture;
+}
+
+// Stage 5: Gym Auditorium Acoustic Wood Wall
+function createGymWallTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#221f1c';
+  ctx.fillRect(0, 0, 256, 256);
+
+  // Heavy wooden acoustic ribs
+  for (let x = 0; x < 256; x += 16) {
+    ctx.fillStyle = '#6e4a2d';
+    ctx.fillRect(x, 0, 12, 195);
+    ctx.strokeStyle = '#181512';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, 0, 14, 195);
+  }
+
+  // Concrete buffer base
+  ctx.fillStyle = '#3a3835';
+  ctx.fillRect(0, 195, 256, 61);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  return texture;
+}
+
+// --- Application Bootstrap ---
+function boot() {
+  try {
+    initThree();
+    buildFirstPersonFlashlight();
+    buildAllMonsters();
+    loadStage(1);
+    setupEventListeners();
+    setupCustomizerUI();
+
+    // Animation Loop
+    let lastTime = performance.now();
+    function animate(now) {
+      const dt = Math.min((now - lastTime) / 1000, 0.1);
+      lastTime = now;
+
+      if (gameState === 'playing') {
+        updateGame(dt);
+      } else if (gameState === 'title' || gameState === 'lobby') {
+        updateCinematicCamera(now);
+      }
+
+      renderThree(dt);
+      requestAnimationFrame(animate);
+    }
+    requestAnimationFrame(animate);
+  } catch (err) {
+    console.error('[Kowakowa Boot Error]', err);
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', boot);
+} else {
+  boot();
+}
 
 // --- High-Performance Three.js Setup (Shadows disabled, lightweight materials) ---
 function initThree() {
@@ -427,6 +739,13 @@ function initThree() {
   gymFloorTexture = createGymFloorTexture();
   noticeBoardTexture = createNoticeBoardTexture();
   shoeLockerTexture = createShoeLockerTexture();
+  labTileFloorTexture = createLabTileFloorTexture();
+  labTileWallTexture = createLabTileWallTexture();
+  musicParquetFloorTexture = createMusicParquetFloorTexture();
+  musicVelvetWallTexture = createMusicVelvetWallTexture();
+  libraryStoneFloorTexture = createLibraryStoneFloorTexture();
+  libraryBrickWallTexture = createLibraryBrickWallTexture();
+  gymWallTexture = createGymWallTexture();
 
   window.addEventListener('resize', onWindowResize);
 }
@@ -473,16 +792,16 @@ function updateFlashlightVisibility() {
 const CELL_SIZE = 4.0;
 const WALL_HEIGHT = 3.5;
 
-// Layout definitions for Stages 1 to 5
-// 0: Floor/Corridor, 1: Wood Wall, 2: Hiding spot (Bed/Locker), 3: Exit Stairs/Gate, 4: Player Spawn
-// 10: Student Desk/Chair, 11: Teacher Podium & Chalkboard, 12: Shoe Locker, 13: Notice Board & Extinguisher
-// 14: Science Lab Bench, 15: Anatomy Skeleton, 16: Music Grand Piano, 17: Library Bookshelves, 18: Gym Equipment
+// Layout definitions for Stages 1 to 5 (Diverse exits, layouts & themes)
+// 0: Floor/Corridor, 1: Wall, 2: Hiding spot, 3: Exit, 4: Spawn
+// 10: Student Desk, 11: Teacher Podium, 12: Shoe Locker, 13: Notice Board
+// 14: Lab Bench, 15: Skeleton, 16: Grand Piano, 17: Bookshelves, 18: Gym Equipment
 const STAGE_MAZES = [
-  // Stage 1: 1階 普通教室棟・保健室・昇降口 (14x14)
+  // Stage 1: 1階 普通教室棟・保健室 (14x14) -> Exit: Top-Right (r=1, c=12)
   [
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    [1,11, 0, 0, 1,11, 0, 0, 1, 2, 0, 2, 1, 1],
-    [1, 4,10,10, 1, 0,10,10, 1, 0, 0, 0, 1, 1],
+    [1,11, 0, 0, 1,11, 0, 0, 1, 2, 0, 2, 3, 1],
+    [1, 4,10,10, 1, 0,10,10, 1, 0, 0, 0, 0, 1],
     [1, 0,10,10, 0, 0,10,10, 0, 0, 2, 0, 1, 1],
     [1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
@@ -491,14 +810,14 @@ const STAGE_MAZES = [
     [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1],
     [1,10,10, 0, 1,10,10, 0, 1, 0, 2, 0, 1, 1],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1,12,12, 0, 0, 0,12,12, 0, 0, 0, 0, 3, 1],
+    [1,12,12, 0, 0, 0,12,12, 0, 0, 2, 0, 0, 1],
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
   ],
-  // Stage 2: 2階 理科実験室・標本室・準備室 (14x14)
+  // Stage 2: 2階 理科実験室・標本室 (14x14) -> Exit: Bottom-Left (r=11, c=1)
   [
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    [1,11, 0, 0, 1,14, 0,14, 1,14, 0,14, 1, 1],
-    [1, 4,10, 0, 1, 0,15, 0, 1, 0, 0, 0, 1, 1],
+    [1,11, 0, 0, 1,14, 0,14, 1,14, 0,14, 4, 1],
+    [1, 0,10, 0, 1, 0,15, 0, 1, 0, 0, 0, 0, 1],
     [1, 0,10, 0, 0,14, 0,14, 0,14, 0,14, 1, 1],
     [1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
@@ -507,14 +826,14 @@ const STAGE_MAZES = [
     [1, 2, 0, 2, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1],
     [1, 0, 0, 0, 1,14, 0,14, 1, 0, 2, 0, 1, 1],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 3, 1],
+    [1, 3, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 2, 1],
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
   ],
-  // Stage 3: 3階 音楽室・美術室棟 (15x15)
+  // Stage 3: 3階 音楽室・美術室棟 (15x15) -> Exit: Top-Left (r=1, c=1)
   [
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    [1,11, 0, 0, 1,16, 0, 0, 0, 1, 0, 0, 0, 2, 1],
-    [1, 4,10, 0, 1, 0, 0,10,10, 1, 0,10,10, 0, 1],
+    [1, 3, 0, 0, 1,16, 0, 0, 0, 1, 0, 0, 0, 2, 1],
+    [1, 0, 0, 0, 1, 0, 0,10,10, 1, 0,10,10, 0, 1],
     [1, 0,10, 0, 0, 0, 0,10,10, 0, 0,10,10, 0, 1],
     [1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
@@ -523,29 +842,29 @@ const STAGE_MAZES = [
     [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 1],
     [1,10, 0,10, 1,10, 0,10, 1, 0, 2, 0, 1, 0, 1],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 2, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 3, 1],
+    [1, 2, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 4, 1],
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
   ],
-  // Stage 4: 別館 図書室迷路・旧校長室 (15x15)
+  // Stage 4: 別館 旧地下書庫・閉鎖病棟 (15x15) -> Exit: Center Archive (r=6, c=6)
   [
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     [1, 4, 0, 0, 1,17, 0,17, 0,17, 1, 0, 0, 2, 1],
     [1, 0,17, 0, 1, 0, 0, 0, 0, 0, 1, 0, 2, 0, 1],
     [1, 0,17, 0, 0,17, 0,17, 0,17, 0, 0, 0, 0, 1],
     [1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1,13, 0,12, 0,13, 0, 2, 0,13, 0,12, 0,13, 1],
-    [1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1],
+    [1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+    [1,13, 0,17, 0, 1, 3, 0, 0, 1, 0,17, 0,13, 1],
+    [1, 1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1],
     [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 1],
     [1,10, 0,10, 1,17, 0,17, 1, 0, 2, 0, 1, 0, 1],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 2, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 3, 1],
+    [1, 2, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 2, 1],
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
   ],
-  // Stage 5: 最深部 体育館・大講堂・大脱出ゲート (16x16)
+  // Stage 5: 最深部 体育館・大講堂・大脱出ゲート (16x16) -> Exit: Far North Grand Gate (r=1, c=7,8)
   [
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    [1, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 1],
+    [1, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 0, 0, 0, 2, 1],
     [1, 0, 0,18, 0, 0, 0, 0, 0, 0,18, 0, 0, 0, 0, 1],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
     [1, 0,18, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0,18, 0, 1],
@@ -557,10 +876,80 @@ const STAGE_MAZES = [
     [1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1],
     [1, 0, 2, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 2, 0, 1],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 0, 0, 0, 0, 1],
+    [1, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
   ]
 ];
+
+// Procedural school maze generator for Stages 6+ (Hard mode / Endless mode)
+function generateProceduralStage(stageNum) {
+  const size = Math.min(22, 14 + Math.floor((stageNum - 5) * 0.7));
+  const grid = Array.from({ length: size }, () => Array(size).fill(1));
+
+  // Carve corridor grid
+  for (let r = 1; r < size - 1; r++) {
+    for (let c = 1; c < size - 1; c++) {
+      if (r % 2 === 1 || c % 2 === 1) {
+        grid[r][c] = 0;
+      }
+    }
+  }
+
+  // Cross walls
+  for (let r = 2; r < size - 2; r += 2) {
+    for (let c = 2; c < size - 2; c += 2) {
+      grid[r][c] = 1;
+      const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+      const [dr, dc] = dirs[Math.floor(Math.random() * dirs.length)];
+      grid[r + dr][c + dc] = 1;
+    }
+  }
+
+  // Large rooms
+  const numRooms = 2 + (stageNum % 3);
+  for (let k = 0; k < numRooms; k++) {
+    const rx = 1 + Math.floor(Math.random() * (size - 5));
+    const ry = 1 + Math.floor(Math.random() * (size - 5));
+    for (let r = ry; r < ry + 3; r++) {
+      for (let c = rx; c < rx + 3; c++) {
+        grid[r][c] = 0;
+      }
+    }
+  }
+
+  // Corner spawn
+  const corner = stageNum % 4;
+  let sr = 1, sc = 1;
+  if (corner === 1) { sr = 1; sc = size - 2; }
+  else if (corner === 2) { sr = size - 2; sc = size - 2; }
+  else if (corner === 3) { sr = size - 2; sc = 1; }
+  grid[sr][sc] = 4;
+
+  // Opposite quadrant exit
+  const er = size - 1 - sr;
+  const ec = size - 1 - sc;
+  grid[er][ec] = 3;
+  if (er > 1) grid[er - 1][ec] = 0;
+  if (ec > 1) grid[er][ec - 1] = 0;
+
+  // Hiding spots and thematic props
+  let hidesCount = 0;
+  for (let r = 1; r < size - 1; r++) {
+    for (let c = 1; c < size - 1; c++) {
+      if (grid[r][c] === 0 && !(r === sr && c === sc) && !(r === er && c === ec)) {
+        const rand = Math.random();
+        if (rand < 0.05 && hidesCount < 6) {
+          grid[r][c] = 2;
+          hidesCount++;
+        } else if (rand < 0.11) {
+          const propList = [10, 12, 13, 14, 15, 16, 17, 18];
+          grid[r][c] = propList[Math.floor(Math.random() * propList.length)];
+        }
+      }
+    }
+  }
+  return grid;
+}
 
 // Load and build a stage, thoroughly disposing previous stage
 function loadStage(stageNum) {
@@ -585,17 +974,32 @@ function loadStage(stageNum) {
   currentStageGroup = new THREE.Group();
   scene.add(currentStageGroup);
 
-  const grid = STAGE_MAZES[stageNum - 1];
+  // 1. Deep clone stage maze so random exit placement does not mutate original blueprint
+  const baseGrid = (stageNum <= 5) ? STAGE_MAZES[stageNum - 1] : generateProceduralStage(stageNum);
+  const grid = baseGrid.map(row => [...row]);
   const rows = grid.length;
   const cols = grid[0].length;
   const totalW = cols * CELL_SIZE;
   const totalL = rows * CELL_SIZE;
 
+  // Update HUD
+  const maxStages = getMaxStages();
+  if (hudStageBadge) {
+    hudStageBadge.textContent = (currentMode === 'endless') ? `STAGE ${stageNum} (無限)` : `STAGE ${stageNum} / ${maxStages}`;
+  }
+  const config = getStageConfig(stageNum);
+  if (hudStageTitle) {
+    hudStageTitle.textContent = config.title;
+  }
+
   // Scan grid for player spawn point (type === 4)
   let spawnFound = false;
+  let spawnR = 1, spawnC = 1;
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       if (grid[r][c] === 4) {
+        spawnR = r;
+        spawnC = c;
         spawnWorldPos.set(c * CELL_SIZE, STAND_HEIGHT, r * CELL_SIZE);
         spawnFound = true;
         break;
@@ -607,6 +1011,8 @@ function loadStage(stageNum) {
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         if (grid[r][c] === 0) {
+          spawnR = r;
+          spawnC = c;
           spawnWorldPos.set(c * CELL_SIZE, STAND_HEIGHT, r * CELL_SIZE);
           spawnFound = true;
           break;
@@ -616,10 +1022,81 @@ function loadStage(stageNum) {
     }
   }
 
-  // Floor & Ceiling with shared Lambert material (lightweight & visible)
-  const floorMat = new THREE.MeshLambertMaterial({ map: (stageNum === 5 ? gymFloorTexture : woodFloorTexture) });
-  const ceilingMat = new THREE.MeshLambertMaterial({ color: 0x423428 });
-  const wallMat = new THREE.MeshLambertMaterial({ map: woodWallTexture });
+  // --- DYNAMIC RANDOM EXIT GENERATION (Changes every single play / stage load) ---
+  // 1. Clear any pre-existing exits (type 3)
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (grid[r][c] === 3) {
+        grid[r][c] = 0;
+      }
+    }
+  }
+
+  // 2. Collect candidate open walkable cells (type 0) sufficiently far from the spawn point
+  const exitCandidates = [];
+  const minExitDistance = Math.min(7, Math.max(4, Math.floor(Math.max(rows, cols) * 0.42)));
+  for (let r = 1; r < rows - 1; r++) {
+    for (let c = 1; c < cols - 1; c++) {
+      if (grid[r][c] === 0) {
+        const dist = Math.hypot(r - spawnR, c - spawnC);
+        if (dist >= minExitDistance) {
+          exitCandidates.push({ r, c, dist });
+        }
+      }
+    }
+  }
+
+  // 3. Randomly choose an exit from the candidate positions
+  if (exitCandidates.length > 0) {
+    exitCandidates.sort((a, b) => b.dist - a.dist);
+    const candidatePool = exitCandidates.slice(0, Math.max(3, Math.floor(exitCandidates.length * 0.65)));
+    const chosenExit = candidatePool[Math.floor(Math.random() * candidatePool.length)];
+    grid[chosenExit.r][chosenExit.c] = 3;
+  } else {
+    // Fallback: opposite corner of spawn
+    const er = rows - 1 - spawnR;
+    const ec = cols - 1 - spawnC;
+    grid[Math.max(1, Math.min(rows - 2, er))][Math.max(1, Math.min(cols - 2, ec))] = 3;
+  }
+
+  // Thematic textures & atmosphere per stage
+  const themeIndex = (stageNum - 1) % 5;
+  let floorMat, wallMat, ceilingMat, fogColor;
+
+  if (themeIndex === 0) {
+    // 1F Wooden Classroom & Corridor
+    floorMat = new THREE.MeshLambertMaterial({ map: woodFloorTexture });
+    wallMat = new THREE.MeshLambertMaterial({ map: woodWallTexture });
+    ceilingMat = new THREE.MeshLambertMaterial({ color: 0x423428 });
+    fogColor = 0x181c25;
+  } else if (themeIndex === 1) {
+    // 2F Science Lab & Specimen Room
+    floorMat = new THREE.MeshLambertMaterial({ map: labTileFloorTexture });
+    wallMat = new THREE.MeshLambertMaterial({ map: labTileWallTexture });
+    ceilingMat = new THREE.MeshLambertMaterial({ color: 0x2b3832 });
+    fogColor = 0x14201c;
+  } else if (themeIndex === 2) {
+    // 3F Music & Art Auditorium Hall
+    floorMat = new THREE.MeshLambertMaterial({ map: musicParquetFloorTexture });
+    wallMat = new THREE.MeshLambertMaterial({ map: musicVelvetWallTexture });
+    ceilingMat = new THREE.MeshLambertMaterial({ color: 0x381e24 });
+    fogColor = 0x201217;
+  } else if (themeIndex === 3) {
+    // 4F Basement Secret Archive & Library
+    floorMat = new THREE.MeshLambertMaterial({ map: libraryStoneFloorTexture });
+    wallMat = new THREE.MeshLambertMaterial({ map: libraryBrickWallTexture });
+    ceilingMat = new THREE.MeshLambertMaterial({ color: 0x252a30 });
+    fogColor = 0x161a22;
+  } else {
+    // 5F Gym & Grand Hall
+    floorMat = new THREE.MeshLambertMaterial({ map: gymFloorTexture });
+    wallMat = new THREE.MeshLambertMaterial({ map: gymWallTexture });
+    ceilingMat = new THREE.MeshLambertMaterial({ color: 0x3a2c1e });
+    fogColor = 0x221a12;
+  }
+
+  scene.background.setHex(fogColor);
+  scene.fog.color.setHex(fogColor);
 
   const floorGeo = new THREE.PlaneGeometry(totalW, totalL);
   const floor = new THREE.Mesh(floorGeo, floorMat);
@@ -675,7 +1152,7 @@ function loadStage(stageNum) {
           }
         } else if (type === 3) {
           exitDoorPos.set(wx, 0, wz);
-          buildSchoolExitStairs(currentStageGroup, wx, wz, stageNum === MAX_STAGES);
+          buildSchoolExitStairs(currentStageGroup, wx, wz, stageNum === maxStages);
         } else if (type === 10) {
           buildStudentDeskAndChair(currentStageGroup, wx, wz);
         } else if (type === 11) {
@@ -716,11 +1193,6 @@ function loadStage(stageNum) {
   isHidden = false;
   currentHidingSpot = null;
 
-  // Update HUD Stage info
-  const config = STAGE_CONFIGS[stageNum - 1];
-  hudStageBadge.textContent = `STAGE ${stageNum} / ${MAX_STAGES}`;
-  hudStageTitle.textContent = config.title;
-  hudStageMonsters.textContent = config.monstersText;
   nextMonsterTimer = config.nextWait;
 }
 
@@ -1217,6 +1689,13 @@ function setupEventListeners() {
 
     // Energy Drink [Q]
     if (k === 'q') useEnergyDrink();
+
+    // Item Action [F] (Stun Gun, Grappler, Drink)
+    if (k === 'f') {
+      if (selectedItem === 'stungun') useStunGun();
+      else if (selectedItem === 'grappler') useGrappler();
+      else if (selectedItem === 'drink') useEnergyDrink();
+    }
   });
 
   window.addEventListener('keyup', (e) => {
@@ -1241,6 +1720,18 @@ function setupEventListeners() {
       lastMouseY = e.clientY;
       if (!isPointerLocked) {
         try { canvas.requestPointerLock(); } catch(err) {}
+      }
+    }
+  });
+
+  canvas.addEventListener('click', (e) => {
+    if (gameState === 'playing' && !isHidden && !isDead) {
+      if (selectedItem === 'stungun') {
+        useStunGun();
+      } else if (selectedItem === 'grappler') {
+        useGrappler();
+      } else if (selectedItem === 'drink') {
+        useEnergyDrink();
       }
     }
   });
@@ -1276,7 +1767,14 @@ function setupEventListeners() {
   jumpBtn.addEventListener('click', () => handleJump());
   hideBtn.addEventListener('click', () => handleInteract());
   drinkBtn.addEventListener('click', () => useEnergyDrink());
-  hotbarSlot1.addEventListener('click', () => toggleSlot1());
+  if (stungunBtn) stungunBtn.addEventListener('click', () => useStunGun());
+  if (grapplerBtn) grapplerBtn.addEventListener('click', () => useGrappler());
+  hotbarSlot1.addEventListener('click', () => {
+    if (selectedItem === 'stungun') useStunGun();
+    else if (selectedItem === 'grappler') useGrappler();
+    else if (selectedItem === 'drink') useEnergyDrink();
+    else toggleSlot1();
+  });
 
   // Solo & Online Lobby buttons
   document.getElementById('soloStartBtn').addEventListener('click', () => {
@@ -1297,7 +1795,7 @@ function setupEventListeners() {
     sound.init();
     const code = document.getElementById('joinCodeInput').value.trim();
     if (!code) {
-      alert("部屋コード（4桁）を入力してください");
+      showGameToast("⚠️ 部屋コード（4桁）を入力してください");
       return;
     }
     localPlayerName = document.getElementById('playerNameInput').value.trim() || localPlayerName;
@@ -1306,7 +1804,7 @@ function setupEventListeners() {
       await roomManager.joinRoom(code, selectedItem, characterCustomization);
       openLobby(code, false);
     } catch (err) {
-      alert(err.message || "部屋への参加に失敗しました");
+      showGameToast(err.message ? `❌ ${err.message}` : "❌ 部屋への参加に失敗しました");
     }
   });
 
@@ -1336,16 +1834,29 @@ function setupEventListeners() {
     returnToHomeScreen();
   });
 
-  // Item card selection
-  document.querySelectorAll('.item-select-card').forEach(card => {
-    card.addEventListener('click', () => {
-      document.querySelectorAll('.item-select-card').forEach(c => c.classList.remove('selected'));
-      card.classList.add('selected');
-      selectedItem = card.dataset.item;
-      updateItemSlotView();
+  // Shop & Mode Selector
+  if (openShopBtn) openShopBtn.addEventListener('click', () => openShop());
+  if (closeShopBtn) closeShopBtn.addEventListener('click', () => closeShop());
+  if (shopModal) {
+    shopModal.addEventListener('click', (e) => {
+      if (e.target === shopModal) closeShop();
+    });
+  }
+
+  document.querySelectorAll('#modeSelectorTabs .mode-tab').forEach(tab => {
+    if (tab.dataset.mode === currentMode) tab.classList.add('active');
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('#modeSelectorTabs .mode-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentMode = tab.dataset.mode;
+      saveUserData();
+      showGameToast(`🎮 モード設定: ${tab.textContent.trim()}`);
     });
   });
 
+  renderShop();
+  renderEquippedItemSelection();
+  updateItemSlotView();
   setupTouchControls();
 }
 
@@ -1450,19 +1961,138 @@ function updateSlotUI() {
   }
 }
 
+let toastTimer = null;
+function showGameToast(msg) {
+  const toast = document.getElementById('gameToast');
+  if (!toast) return;
+  toast.textContent = msg;
+  toast.style.display = 'block';
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toast.style.display = 'none';
+  }, 2600);
+}
+
+function openShop() {
+  renderShop();
+  if (shopModal) shopModal.style.display = 'flex';
+}
+
+function closeShop() {
+  if (shopModal) shopModal.style.display = 'none';
+}
+
+function updatePointsDisplay() {
+  if (userPointsText) userPointsText.textContent = userPoints.toLocaleString();
+  if (shopPointsText) shopPointsText.textContent = userPoints.toLocaleString();
+}
+
+function renderShop() {
+  updatePointsDisplay();
+  if (!shopItemsList) return;
+  shopItemsList.innerHTML = '';
+
+  SHOP_ITEMS.forEach(item => {
+    const isUnlocked = unlockedItems.includes(item.id);
+    const card = document.createElement('div');
+    card.className = `shop-item-card ${isUnlocked ? 'unlocked' : ''}`;
+
+    const canAfford = userPoints >= item.price;
+    const btnText = isUnlocked 
+      ? '解放済み (所持)' 
+      : (canAfford ? `購入 (${item.price}P)` : `不足 (${item.price}P)`);
+
+    card.innerHTML = `
+      <div style="font-size: 2.2rem; margin-bottom: 6px;">${item.icon}</div>
+      <div style="font-size: 1.05rem; font-weight: 800; color: #fff;">${item.name}</div>
+      <span class="shop-badge">${item.tag}</span>
+      <div style="font-size: 0.76rem; color: #bbb; margin: 8px 0 12px; min-height: 38px;">${item.desc}</div>
+      <button class="shop-buy-btn ${isUnlocked ? 'unlocked' : ''}" ${isUnlocked || !canAfford ? 'disabled' : ''}>
+        ${btnText}
+      </button>
+    `;
+
+    const buyBtn = card.querySelector('.shop-buy-btn');
+    if (!isUnlocked && canAfford) {
+      buyBtn.addEventListener('click', () => {
+        if (userPoints >= item.price) {
+          userPoints -= item.price;
+          unlockedItems.push(item.id);
+          selectedItem = item.id;
+          sound.playShopBuy();
+          saveUserData();
+          renderShop();
+          renderEquippedItemSelection();
+          updateItemSlotView();
+          showGameToast(`🎉 ${item.name} を解放し、装備しました！`);
+        }
+      });
+    }
+
+    shopItemsList.appendChild(card);
+  });
+}
+
+function renderEquippedItemSelection() {
+  if (!itemSelectGrid) return;
+  itemSelectGrid.innerHTML = '';
+
+  SHOP_ITEMS.forEach(item => {
+    const isUnlocked = unlockedItems.includes(item.id);
+    const isSelected = selectedItem === item.id;
+
+    const card = document.createElement('div');
+    card.className = `item-card ${isSelected ? 'active' : ''} ${!isUnlocked ? 'locked-item' : ''}`;
+    card.dataset.item = item.id;
+
+    card.innerHTML = `
+      <div style="font-size: 1.6rem;">${item.icon}</div>
+      <strong style="font-size: 0.88rem; color: ${isUnlocked ? '#fff' : '#888'};">${item.name}</strong>
+      <span style="font-size: 0.68rem; color: ${isSelected ? '#f1c40f' : (isUnlocked ? '#2ecc71' : '#e74c3c')};">
+        ${isSelected ? '● 装備中' : (isUnlocked ? '所持' : '🔒 未解放')}
+      </span>
+    `;
+
+    card.addEventListener('click', () => {
+      if (isUnlocked) {
+        selectedItem = item.id;
+        saveUserData();
+        renderEquippedItemSelection();
+        updateItemSlotView();
+        sound.playFlashlightClick();
+      } else {
+        openShop();
+        showGameToast(`🛒 ${item.name} はショップで解放できます！`);
+      }
+    });
+
+    itemSelectGrid.appendChild(card);
+  });
+}
+
 function updateItemSlotView() {
+  if (drinkBtn) drinkBtn.style.display = 'none';
+  if (stungunBtn) stungunBtn.style.display = 'none';
+  if (grapplerBtn) grapplerBtn.style.display = 'none';
+
   if (selectedItem === 'flashlight') {
     slotIcon.textContent = '🔦';
     slotLabel.textContent = '懐中電灯';
-    drinkBtn.style.display = 'none';
   } else if (selectedItem === 'bandage') {
     slotIcon.textContent = '🩹';
     slotLabel.textContent = '絆創膏';
-    drinkBtn.style.display = 'none';
   } else if (selectedItem === 'drink') {
-    slotIcon.textContent = '⚡';
+    slotIcon.textContent = '🥤';
     slotLabel.textContent = 'エナドリ';
-    drinkBtn.style.display = 'flex';
+    if (drinkBtn) drinkBtn.style.display = 'flex';
+  } else if (selectedItem === 'stungun') {
+    slotIcon.textContent = '⚡';
+    slotLabel.textContent = 'スタンガン';
+    if (stungunBtn) stungunBtn.style.display = 'flex';
+  } else if (selectedItem === 'grappler') {
+    slotIcon.textContent = '🪝';
+    slotLabel.textContent = 'グラップラー';
+    if (grapplerBtn) grapplerBtn.style.display = 'flex';
   }
   updateFlashlightVisibility();
 }
@@ -1472,6 +2102,78 @@ function useEnergyDrink() {
   drinkCooldown = 60;
   drinkActiveTimer = 8;
   sound.playEnergyDrink();
+  showGameToast('🥤 エナジードリンク注入！(8秒間 爆速ダッシュ)');
+}
+
+function useStunGun() {
+  if (selectedItem !== 'stungun' || stunGunCooldown > 0 || gameState !== 'playing' || isDead) return;
+  stunGunCooldown = 35;
+  sound.playStunGun();
+
+  // Screen shock effect
+  if (warningOverlay) {
+    warningOverlay.className = 'flicker-stungun';
+    setTimeout(() => {
+      if (warningOverlay.className === 'flicker-stungun') warningOverlay.className = '';
+    }, 350);
+  }
+
+  // If a monster is currently rushing, stun/destroy it for 1 round!
+  if (isMonsterRushing) {
+    isMonsterRushing = false;
+    const activeGroup = getActiveMonsterGroup(currentMonsterType);
+    if (activeGroup) activeGroup.visible = false;
+    showGameToast('⚡ スタンガン命中！バケモノを1回撃退した！(35秒CT)');
+    sound.playHeartbeat(true);
+    const config = getStageConfig(currentStage);
+    nextMonsterTimer = config.nextWait + 8;
+  } else {
+    showGameToast('⚡ スタンガン放電！(35秒クールダウン)');
+  }
+}
+
+function useGrappler() {
+  if (selectedItem !== 'grappler' || grapplerCooldown > 0 || gameState !== 'playing' || isHidden || isDead) return;
+  
+  grapplerRaycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+  const intersects = currentStageGroup ? grapplerRaycaster.intersectObjects(currentStageGroup.children, true) : [];
+
+  if (intersects.length > 0) {
+    const hit = intersects[0];
+    const dist = hit.distance;
+
+    if (dist >= 1.5 && dist <= 28) {
+      grapplerCooldown = 10;
+      sound.playGrappler();
+
+      const dir = hit.point.clone().sub(camera.position).normalize();
+      const dest = hit.point.clone().sub(dir.clone().multiplyScalar(1.2));
+      dest.y = STAND_HEIGHT;
+
+      if (!checkWallCollision(dest.x, dest.z, 0.45)) {
+        camera.position.x = dest.x;
+        camera.position.z = dest.z;
+        playerY = STAND_HEIGHT;
+        camera.position.y = STAND_HEIGHT;
+        showGameToast('🪝 グラップラー急加速！(10秒CT)');
+      } else {
+        const partialDest = camera.position.clone().addScaledVector(dir, dist * 0.65);
+        if (!checkWallCollision(partialDest.x, partialDest.z, 0.45)) {
+          camera.position.x = partialDest.x;
+          camera.position.z = partialDest.z;
+          playerY = STAND_HEIGHT;
+          camera.position.y = STAND_HEIGHT;
+          showGameToast('🪝 グラップラー発射！(10秒CT)');
+        } else {
+          showGameToast('🪝 障害物に遮られました');
+        }
+      }
+    } else if (dist > 28) {
+      showGameToast('🪝 射程外です（最大28m）');
+    }
+  } else {
+    showGameToast('🪝 対象がありません');
+  }
 }
 
 function setupTouchControls() {
@@ -1632,6 +2334,30 @@ function updateGame(dt) {
     drinkCooldownBar.style.width = '0%';
   }
 
+  if (stunGunCooldown > 0) {
+    stunGunCooldown -= dt;
+    if (stungunCooldownBar) {
+      const pct = Math.max(0, stunGunCooldown / 35) * 100;
+      stungunCooldownBar.style.width = pct + '%';
+    }
+    if (stungunBtn) stungunBtn.disabled = true;
+  } else {
+    if (stungunBtn) stungunBtn.disabled = false;
+    if (stungunCooldownBar) stungunCooldownBar.style.width = '0%';
+  }
+
+  if (grapplerCooldown > 0) {
+    grapplerCooldown -= dt;
+    if (grapplerCooldownBar) {
+      const pct = Math.max(0, grapplerCooldown / 10) * 100;
+      grapplerCooldownBar.style.width = pct + '%';
+    }
+    if (grapplerBtn) grapplerBtn.disabled = true;
+  } else {
+    if (grapplerBtn) grapplerBtn.disabled = false;
+    if (grapplerCooldownBar) grapplerCooldownBar.style.width = '0%';
+  }
+
   if (drinkActiveTimer > 0) drinkActiveTimer -= dt;
 
   // Player Movement & Gravity
@@ -1697,6 +2423,9 @@ function updateGame(dt) {
   updateInteractPrompt();
   updateMonstersSequence(dt);
 
+  // Sync position history for purple monster movement detection
+  lastPlayerPos.copy(camera.position);
+
   // Sync to RoomManager (WebSocket)
   syncTimer += dt;
   if (syncTimer > 0.1 && roomManager) {
@@ -1750,8 +2479,9 @@ function updateMonstersSequence(dt) {
         // Must JUMP [Space] above 1.2m
         isSafe = (playerY > 1.2 && Math.abs(playerVy) > 0.5);
       } else if (currentMonsterType === 'purple') {
-        // Must TURN OFF FLASHLIGHT [1]
-        isSafe = (!isSlot1Held || selectedItem !== 'flashlight');
+        // Must KEEP MOVING (動く必要があります)
+        const isMoving = keys.w || keys.a || keys.s || keys.d || (Math.hypot(camera.position.x - lastPlayerPos.x, camera.position.z - lastPlayerPos.z) > 0.015);
+        isSafe = isMoving;
       }
 
       if (isSafe) {
@@ -1764,7 +2494,7 @@ function updateMonstersSequence(dt) {
     if (monsterProgress > 80) {
       isMonsterRushing = false;
       activeGroup.visible = false;
-      const config = STAGE_CONFIGS[currentStage - 1];
+      const config = getStageConfig(currentStage);
       nextMonsterTimer = config.nextWait + Math.random() * 8;
     }
     return;
@@ -1785,7 +2515,7 @@ function getActiveMonsterGroup(type) {
 
 function chooseAndTriggerMonsterWarning() {
   isWarningActive = true;
-  const config = STAGE_CONFIGS[currentStage - 1];
+  const config = getStageConfig(currentStage);
   const pool = config.allowedMonsters;
   currentMonsterType = pool[Math.floor(Math.random() * pool.length)];
 
@@ -1871,13 +2601,23 @@ function triggerJumpscare() {
 // --- Stage Clearance & Progression ---
 function triggerStageClear() {
   sound.playStageClear();
+  const maxStages = getMaxStages();
 
-  if (currentStage >= MAX_STAGES) {
+  // Award points for stage clear
+  const stageBonus = 60 + currentStage * 15;
+  addPoints(stageBonus);
+
+  if (currentStage >= maxStages) {
     // Game Completed!
+    addPoints(350);
     hasCleared = true;
     if (document.exitPointerLock) document.exitPointerLock();
     hudElement.style.display = 'none';
     clearScreen.style.display = 'flex';
+    const clearDesc = document.getElementById('clearScreenDesc');
+    if (clearDesc) {
+      clearDesc.textContent = `全${maxStages}ステージを突破！霊力ポイント+350P獲得！無事に旧校舎から生還しました。`;
+    }
     return;
   }
 
@@ -1890,7 +2630,7 @@ function triggerStageClear() {
 
   // Show Stage Transition Screen
   gameState = 'transition';
-  transitionTitle.textContent = `第${currentStage}ステージ クリア！`;
+  transitionTitle.textContent = `第${currentStage}ステージ クリア！ (+${stageBonus}P)`;
   transitionDesc.textContent = `階段を駆け上がり、第${nextStageNum}ステージへ突入します……`;
   stageTransitionOverlay.style.display = 'flex';
 
@@ -1903,6 +2643,17 @@ function triggerStageClear() {
 
 function returnToHomeScreen() {
   if (document.exitPointerLock) document.exitPointerLock();
+
+  // Award points upon game over based on stage reached
+  if (isDead) {
+    const earned = Math.max(25, currentStage * 30);
+    addPoints(earned);
+    if (homeDeathToast) {
+      homeDeathToast.textContent = `☠️ バケモノに追いつかれた…… 霊力ポイント +${earned}P 獲得！（第1ステージから再挑戦）`;
+      homeDeathToast.style.display = 'block';
+      setTimeout(() => { homeDeathToast.style.display = 'none'; }, 4500);
+    }
+  }
 
   gameState = 'title';
   isDead = false;
@@ -1922,11 +2673,9 @@ function returnToHomeScreen() {
   if (firstPersonFlashlightMesh) firstPersonFlashlightMesh.visible = false;
   if (flashlightLight) flashlightLight.visible = false;
 
-  if (homeDeathToast) {
-    homeDeathToast.textContent = `☠️ バケモノに追いつかれた…… 第1ステージから再挑戦！`;
-    homeDeathToast.style.display = 'block';
-    setTimeout(() => { homeDeathToast.style.display = 'none'; }, 4500);
-  }
+  renderShop();
+  renderEquippedItemSelection();
+  updatePointsDisplay();
 
   // Reset to Stage 1
   loadStage(1);

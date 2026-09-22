@@ -12,6 +12,20 @@ const PORT = 3000;
 const HOST = '0.0.0.0';
 
 app.use(express.json());
+
+// Never cache index.html or game.js so client always loads fresh code
+app.use((req, res, next) => {
+  if (req.path === '/game.js' || req.path === '/' || req.path === '/index.html') {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+  next();
+});
+
+// Explicit favicon handler returning 204 No Content so it never produces 404
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+
 app.use(express.static(__dirname));
 
 // In-memory room storage for instant online multiplayer

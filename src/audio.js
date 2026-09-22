@@ -455,4 +455,71 @@ export class SoundEngine {
       });
     } catch (e) {}
   }
+
+  // Electric Stun Gun Zap
+  playStunGun() {
+    if (!this.ctx) return;
+    try {
+      const t = this.ctx.currentTime;
+      for (let i = 0; i < 4; i++) {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(600 + Math.random() * 800, t + i * 0.05);
+        osc.frequency.linearRampToValueAtTime(120, t + i * 0.05 + 0.08);
+
+        gain.gain.setValueAtTime(0.4, t + i * 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + i * 0.05 + 0.09);
+
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start(t + i * 0.05);
+        osc.stop(t + i * 0.05 + 0.1);
+      }
+    } catch (e) {}
+  }
+
+  // Grappler launch and zip
+  playGrappler() {
+    if (!this.ctx) return;
+    try {
+      const t = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(140, t);
+      osc.frequency.exponentialRampToValueAtTime(950, t + 0.25);
+
+      gain.gain.setValueAtTime(0.35, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+      osc.start(t);
+      osc.stop(t + 0.38);
+    } catch (e) {}
+  }
+
+  // Shop Unlock / Purchase Chime
+  playShopBuy() {
+    if (!this.ctx) return;
+    try {
+      const t = this.ctx.currentTime;
+      const notes = [523.25, 659.25, 783.99, 1046.50];
+      notes.forEach((freq, idx) => {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, t + idx * 0.08);
+
+        gain.gain.setValueAtTime(0.2, t + idx * 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + idx * 0.08 + 0.22);
+
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start(t + idx * 0.08);
+        osc.stop(t + idx * 0.08 + 0.25);
+      });
+    } catch (e) {}
+  }
 }
