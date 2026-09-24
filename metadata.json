@@ -1,6 +1,6 @@
 {
-  "name": "Kowakowa (こわこわ) 〜 夜の旧校舎からの脱出 〜",
-  "description": "ロブロックス風3D学校ホラー『こわこわ』。木造教室・理科室・音楽室・地下書庫・体育館などステージごとに外観や出口が変化。通常(5階)/ハード(15階)/無限モード、ショップでのスタンガン・グラップラー解放、動いて回避する紫の怪異など多彩なギミックを搭載。マルチプレイ対応。",
+  "name": "人狼オンライン (Werewolf)",
+  "description": "シンプルなGUIで楽しめるオンライン人狼ゲーム。ニックネーム設定、VC音量調整（50%〜500%）、オンラインプレイ、役職確認機能を搭載。",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

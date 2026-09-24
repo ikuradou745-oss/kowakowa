@@ -1,11 +1,9 @@
-// Web Audio Synthesizer for "Kowakowa: Night Old School Horror"
-export class SoundEngine {
+// Web Audio Synthesizer for Werewolf Game (人狼ゲーム)
+export class WerewolfAudio {
   constructor() {
     this.ctx = null;
     this.masterGain = null;
-    this.isMuted = false;
-    this.ambienceGain = null;
-    this.ambienceOsc = null;
+    this.vcVolume = 1.0; // 0.5 to 5.0 (50% to 500%)
     this.initialized = false;
   }
 
@@ -14,512 +12,132 @@ export class SoundEngine {
       if (this.ctx.state === 'suspended') this.ctx.resume();
       return;
     }
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    this.ctx = new AudioCtx();
-    this.masterGain = this.ctx.createGain();
-    this.masterGain.gain.setValueAtTime(0.75, this.ctx.currentTime);
-    this.masterGain.connect(this.ctx.destination);
-    this.initialized = true;
-
-    this.startSchoolAmbience();
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AudioCtx();
+      this.masterGain = this.ctx.createGain();
+      this.masterGain.gain.setValueAtTime(0.6, this.ctx.currentTime);
+      this.masterGain.connect(this.ctx.destination);
+      this.initialized = true;
+    } catch (e) {
+      console.warn("AudioContext not supported", e);
+    }
   }
 
-  startSchoolAmbience() {
-    if (!this.ctx || this.ambienceOsc) return;
+  setVcVolume(percent) {
+    // percent: 50 to 500
+    this.vcVolume = Math.max(0.5, Math.min(5.0, percent / 100));
+  }
+
+  // Subtle clean button click sound
+  playClick() {
+    this.init();
+    if (!this.ctx) return;
     try {
-      // Eerie deep wind whistle in an abandoned wooden school
       const osc = this.ctx.createOscillator();
-      const osc2 = this.ctx.createOscillator();
-      const filter = this.ctx.createBiquadFilter();
-      this.ambienceGain = this.ctx.createGain();
-
+      const gain = this.ctx.createGain();
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(55, this.ctx.currentTime); // Low resonant room tone
+      osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(300, this.ctx.currentTime + 0.08);
 
-      osc2.type = 'triangle';
-      osc2.frequency.setValueAtTime(82, this.ctx.currentTime);
+      gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.08);
 
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(140, this.ctx.currentTime);
-
-      this.ambienceGain.gain.setValueAtTime(0.01, this.ctx.currentTime);
-      this.ambienceGain.gain.exponentialRampToValueAtTime(0.04, this.ctx.currentTime + 2);
-
-      osc.connect(filter);
-      osc2.connect(filter);
-      filter.connect(this.ambienceGain);
-      this.ambienceGain.connect(this.masterGain);
+      osc.connect(gain);
+      gain.connect(this.masterGain);
       osc.start();
-      osc2.start();
-      this.ambienceOsc = osc;
+      osc.stop(this.ctx.currentTime + 0.09);
     } catch (e) {}
   }
 
-  // Wooden floor creak footsteps
-  playWoodFootstep(isRunning = false) {
+  // Confirm / Success chime
+  playSuccess() {
+    this.init();
     if (!this.ctx) return;
     try {
-      const t = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const filter = this.ctx.createBiquadFilter();
-      const gain = this.ctx.createGain();
+      const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
+      notes.forEach((freq, i) => {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, this.ctx.currentTime + i * 0.06);
 
-      osc.type = 'triangle';
-      // Low wooden thud + high creak
-      const baseFreq = 80 + Math.random() * 35;
-      osc.frequency.setValueAtTime(baseFreq, t);
-      osc.frequency.exponentialRampToValueAtTime(35, t + 0.09);
+        gain.gain.setValueAtTime(0.12, this.ctx.currentTime + i * 0.06);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + i * 0.06 + 0.3);
+
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start(this.ctx.currentTime + i * 0.06);
+        osc.stop(this.ctx.currentTime + i * 0.06 + 0.32);
+      });
+    } catch (e) {}
+  }
+
+  // Test sound scaled by the VC Volume (50% ~ 500%)
+  playVcTest() {
+    this.init();
+    if (!this.ctx) return;
+    try {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      const filter = this.ctx.createBiquadFilter();
+
+      osc.type = 'sawtooth';
+      // Voice-like formant fundamental
+      osc.frequency.setValueAtTime(260, this.ctx.currentTime);
+      osc.frequency.linearRampToValueAtTime(320, this.ctx.currentTime + 0.15);
+      osc.frequency.linearRampToValueAtTime(280, this.ctx.currentTime + 0.35);
 
       filter.type = 'bandpass';
-      filter.frequency.setValueAtTime(260 + Math.random() * 80, t);
-      filter.Q.setValueAtTime(3.5, t);
+      filter.frequency.setValueAtTime(1000, this.ctx.currentTime);
+      filter.Q.setValueAtTime(3, this.ctx.currentTime);
 
-      const vol = isRunning ? 0.28 : 0.16;
-      gain.gain.setValueAtTime(vol, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + (isRunning ? 0.11 : 0.08));
+      // Base scale around 0.08, scaled by vcVolume (up to 5x = 0.40)
+      const baseGain = 0.07 * this.vcVolume;
+      gain.gain.setValueAtTime(0.001, this.ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(baseGain, this.ctx.currentTime + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.45);
 
       osc.connect(filter);
       filter.connect(gain);
       gain.connect(this.masterGain);
 
-      osc.start(t);
-      osc.stop(t + 0.12);
+      osc.start();
+      osc.stop(this.ctx.currentTime + 0.5);
     } catch (e) {}
   }
 
-  // Creaking sliding wood door / hiding under bed/locker
-  playHide() {
+  // Distant mysterious wolf howl synthesizer
+  playWolfHowl() {
+    this.init();
     if (!this.ctx) return;
     try {
-      const t = this.ctx.currentTime;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
-
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(160, t);
-      osc.frequency.linearRampToValueAtTime(90, t + 0.22);
-
       const filter = this.ctx.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(300, t);
 
-      gain.gain.setValueAtTime(0.18, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.24);
+      osc.type = 'sine';
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(600, this.ctx.currentTime);
+
+      // Howl pitch contour: starts at 220, slides up to 480, gently wavers down to 260
+      const now = this.ctx.currentTime;
+      osc.frequency.setValueAtTime(200, now);
+      osc.frequency.exponentialRampToValueAtTime(460, now + 0.8);
+      osc.frequency.linearRampToValueAtTime(440, now + 1.4);
+      osc.frequency.exponentialRampToValueAtTime(240, now + 2.4);
+
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(0.08, now + 0.6);
+      gain.gain.linearRampToValueAtTime(0.07, now + 1.4);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.6);
 
       osc.connect(filter);
       filter.connect(gain);
       gain.connect(this.masterGain);
 
-      osc.start(t);
-      osc.stop(t + 0.25);
-    } catch (e) {}
-  }
-
-  playCrouch() {
-    if (!this.ctx) return;
-    try {
-      const t = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(140, t);
-      osc.frequency.exponentialRampToValueAtTime(50, t + 0.15);
-
-      gain.gain.setValueAtTime(0.12, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
-
-      osc.connect(gain);
-      gain.connect(this.masterGain);
-      osc.start(t);
-      osc.stop(t + 0.17);
-    } catch (e) {}
-  }
-
-  playJump() {
-    if (!this.ctx) return;
-    try {
-      const t = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(120, t);
-      osc.frequency.exponentialRampToValueAtTime(260, t + 0.14);
-
-      gain.gain.setValueAtTime(0.2, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
-
-      osc.connect(gain);
-      gain.connect(this.masterGain);
-      osc.start(t);
-      osc.stop(t + 0.16);
-    } catch (e) {}
-  }
-
-  playFlashlightClick() {
-    if (!this.ctx) return;
-    try {
-      const t = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'square';
-      osc.frequency.setValueAtTime(950, t);
-      osc.frequency.exponentialRampToValueAtTime(220, t + 0.04);
-
-      gain.gain.setValueAtTime(0.18, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.045);
-
-      osc.connect(gain);
-      gain.connect(this.masterGain);
-      osc.start(t);
-      osc.stop(t + 0.05);
-    } catch (e) {}
-  }
-
-  // 1. Black Monster Warning: Electrical power outage spark
-  playBlackWarning() {
-    if (!this.ctx) return;
-    try {
-      const t = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(60, t);
-      osc.frequency.linearRampToValueAtTime(30, t + 0.18);
-
-      gain.gain.setValueAtTime(0.3, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.19);
-
-      osc.connect(gain);
-      gain.connect(this.masterGain);
-      osc.start(t);
-      osc.stop(t + 0.2);
-    } catch (e) {}
-  }
-
-  // 2. Red Monster Warning: Sinister crimson chime screech
-  playRedWarning() {
-    if (!this.ctx) return;
-    try {
-      const t = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(440, t);
-      osc.frequency.exponentialRampToValueAtTime(110, t + 0.2);
-
-      gain.gain.setValueAtTime(0.24, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
-
-      osc.connect(gain);
-      gain.connect(this.masterGain);
-      osc.start(t);
-      osc.stop(t + 0.23);
-    } catch (e) {}
-  }
-
-  // 3. Blue Monster Warning: Freezing cold ground spirit whistle
-  playBlueWarning() {
-    if (!this.ctx) return;
-    try {
-      const t = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(280, t);
-      osc.frequency.linearRampToValueAtTime(650, t + 0.15);
-      osc.frequency.linearRampToValueAtTime(180, t + 0.26);
-
-      gain.gain.setValueAtTime(0.22, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
-
-      osc.connect(gain);
-      gain.connect(this.masterGain);
-      osc.start(t);
-      osc.stop(t + 0.3);
-    } catch (e) {}
-  }
-
-  // 4. Purple Monster Warning: Distorted antique music box chime
-  playPurpleWarning() {
-    if (!this.ctx) return;
-    try {
-      const t = this.ctx.currentTime;
-      [587.33, 523.25, 493.88].forEach((freq, idx) => {
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, t + idx * 0.08);
-
-        gain.gain.setValueAtTime(0.18, t + idx * 0.08);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + idx * 0.08 + 0.25);
-
-        osc.connect(gain);
-        gain.connect(this.masterGain);
-        osc.start(t + idx * 0.08);
-        osc.stop(t + idx * 0.08 + 0.28);
-      });
-    } catch (e) {}
-  }
-
-  // Attack Roars
-  playBlackMonsterRoar() {
-    if (!this.ctx) return;
-    try {
-      const t = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(80, t);
-      osc.frequency.linearRampToValueAtTime(45, t + 1.2);
-
-      gain.gain.setValueAtTime(0.4, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
-
-      osc.connect(gain);
-      gain.connect(this.masterGain);
-      osc.start(t);
-      osc.stop(t + 1.25);
-    } catch (e) {}
-  }
-
-  playRedMonsterSwoosh() {
-    if (!this.ctx) return;
-    try {
-      const t = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(450, t);
-      osc.frequency.exponentialRampToValueAtTime(90, t + 0.35);
-
-      gain.gain.setValueAtTime(0.35, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.38);
-
-      osc.connect(gain);
-      gain.connect(this.masterGain);
-      osc.start(t);
-      osc.stop(t + 0.4);
-    } catch (e) {}
-  }
-
-  playBlueMonsterCrawl() {
-    if (!this.ctx) return;
-    try {
-      const t = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(140, t);
-      osc.frequency.linearRampToValueAtTime(220, t + 0.4);
-
-      gain.gain.setValueAtTime(0.3, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
-
-      osc.connect(gain);
-      gain.connect(this.masterGain);
-      osc.start(t);
-      osc.stop(t + 0.5);
-    } catch (e) {}
-  }
-
-  playPurpleMonsterWhisper() {
-    if (!this.ctx) return;
-    try {
-      const t = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(320, t);
-      osc.frequency.linearRampToValueAtTime(180, t + 0.4);
-
-      gain.gain.setValueAtTime(0.25, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
-
-      osc.connect(gain);
-      gain.connect(this.masterGain);
-      osc.start(t);
-      osc.stop(t + 0.5);
-    } catch (e) {}
-  }
-
-  playHeartbeat(isRelieved = false) {
-    if (!this.ctx) return;
-    try {
-      const t = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(65, t);
-      osc.frequency.exponentialRampToValueAtTime(40, t + 0.12);
-
-      gain.gain.setValueAtTime(isRelieved ? 0.18 : 0.35, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
-
-      osc.connect(gain);
-      gain.connect(this.masterGain);
-      osc.start(t);
-      osc.stop(t + 0.15);
-    } catch (e) {}
-  }
-
-  playJumpscare() {
-    if (!this.ctx) return;
-    try {
-      const t = this.ctx.currentTime;
-      const osc1 = this.ctx.createOscillator();
-      const osc2 = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-
-      osc1.type = 'sawtooth';
-      osc1.frequency.setValueAtTime(140, t);
-      osc1.frequency.exponentialRampToValueAtTime(800, t + 0.45);
-
-      osc2.type = 'square';
-      osc2.frequency.setValueAtTime(190, t);
-      osc2.frequency.exponentialRampToValueAtTime(60, t + 0.5);
-
-      gain.gain.setValueAtTime(0.7, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
-
-      osc1.connect(gain);
-      osc2.connect(gain);
-      gain.connect(this.masterGain);
-
-      osc1.start(t);
-      osc2.start(t);
-      osc1.stop(t + 0.65);
-      osc2.stop(t + 0.65);
-    } catch (e) {}
-  }
-
-  playBandageHeal() {
-    if (!this.ctx) return;
-    try {
-      const t = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(320, t);
-      osc.frequency.exponentialRampToValueAtTime(640, t + 0.3);
-
-      gain.gain.setValueAtTime(0.2, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
-
-      osc.connect(gain);
-      gain.connect(this.masterGain);
-      osc.start(t);
-      osc.stop(t + 0.38);
-    } catch (e) {}
-  }
-
-  playEnergyDrink() {
-    if (!this.ctx) return;
-    try {
-      const t = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(200, t);
-      osc.frequency.exponentialRampToValueAtTime(580, t + 0.25);
-
-      gain.gain.setValueAtTime(0.25, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
-
-      osc.connect(gain);
-      gain.connect(this.masterGain);
-      osc.start(t);
-      osc.stop(t + 0.32);
-    } catch (e) {}
-  }
-
-  // School Chime / Stage Clear Bell
-  playStageClear() {
-    if (!this.ctx) return;
-    try {
-      const t = this.ctx.currentTime;
-      // Classic school chime: D4 -> F#4 -> E4 -> A3
-      const chimeNotes = [293.66, 369.99, 329.63, 220.00];
-      chimeNotes.forEach((freq, idx) => {
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, t + idx * 0.28);
-
-        gain.gain.setValueAtTime(0.28, t + idx * 0.28);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + idx * 0.28 + 0.6);
-
-        osc.connect(gain);
-        gain.connect(this.masterGain);
-        osc.start(t + idx * 0.28);
-        osc.stop(t + idx * 0.28 + 0.65);
-      });
-    } catch (e) {}
-  }
-
-  // Electric Stun Gun Zap
-  playStunGun() {
-    if (!this.ctx) return;
-    try {
-      const t = this.ctx.currentTime;
-      for (let i = 0; i < 4; i++) {
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(600 + Math.random() * 800, t + i * 0.05);
-        osc.frequency.linearRampToValueAtTime(120, t + i * 0.05 + 0.08);
-
-        gain.gain.setValueAtTime(0.4, t + i * 0.05);
-        gain.gain.exponentialRampToValueAtTime(0.01, t + i * 0.05 + 0.09);
-
-        osc.connect(gain);
-        gain.connect(this.masterGain);
-        osc.start(t + i * 0.05);
-        osc.stop(t + i * 0.05 + 0.1);
-      }
-    } catch (e) {}
-  }
-
-  // Grappler launch and zip
-  playGrappler() {
-    if (!this.ctx) return;
-    try {
-      const t = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(140, t);
-      osc.frequency.exponentialRampToValueAtTime(950, t + 0.25);
-
-      gain.gain.setValueAtTime(0.35, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
-
-      osc.connect(gain);
-      gain.connect(this.masterGain);
-      osc.start(t);
-      osc.stop(t + 0.38);
-    } catch (e) {}
-  }
-
-  // Shop Unlock / Purchase Chime
-  playShopBuy() {
-    if (!this.ctx) return;
-    try {
-      const t = this.ctx.currentTime;
-      const notes = [523.25, 659.25, 783.99, 1046.50];
-      notes.forEach((freq, idx) => {
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, t + idx * 0.08);
-
-        gain.gain.setValueAtTime(0.2, t + idx * 0.08);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + idx * 0.08 + 0.22);
-
-        osc.connect(gain);
-        gain.connect(this.masterGain);
-        osc.start(t + idx * 0.08);
-        osc.stop(t + idx * 0.08 + 0.25);
-      });
+      osc.start(now);
+      osc.stop(now + 2.7);
     } catch (e) {}
   }
 }

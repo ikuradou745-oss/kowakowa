@@ -16,15 +16,15 @@ const HOST = '0.0.0.0';
 function ensureGameBundle() {
   const bundlePath = path.join(__dirname, 'game.js');
   if (!fs.existsSync(bundlePath)) {
-    console.log('[kowakowa] game.js not found. Bundling src/main.js with esbuild...');
+    console.log('[jinrou-online] game.js not found. Bundling src/main.js with esbuild...');
     try {
       execSync('npx esbuild src/main.js --bundle --outfile=game.js --format=esm', {
         cwd: __dirname,
         stdio: 'inherit'
       });
-      console.log('[kowakowa] Successfully bundled game.js');
+      console.log('[jinrou-online] Successfully bundled game.js');
     } catch (e) {
-      console.error('[kowakowa] Failed to build game.js:', e);
+      console.error('[jinrou-online] Failed to build game.js:', e);
     }
   }
 }
@@ -118,7 +118,7 @@ function getRoomSnapshot(room) {
 
 // REST fallback APIs
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', app: 'kowakowa', activeRooms: rooms.size });
+  res.json({ status: 'ok', app: 'jinrou-online', activeRooms: rooms.size });
 });
 
 app.get('/api/rooms/:code', (req, res) => {
@@ -290,5 +290,5 @@ wss.on('connection', (ws) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`[kowakowa] School Horror Server running on http://${HOST}:${PORT}`);
+  console.log(`[jinrou-online] Werewolf Server running on http://${HOST}:${PORT}`);
 });
