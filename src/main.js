@@ -24,75 +24,126 @@ if (isNaN(vcVolume) || vcVolume < 50 || vcVolume > 500) {
 }
 sound.setVcVolume(vcVolume);
 
+// Coin System (Defaults to 500 so user can test-unlock roles immediately)
+let userCoins = parseInt(localStorage.getItem('jinrou_coins'), 10);
+if (isNaN(userCoins) || userCoins < 0) {
+  userCoins = 500;
+  localStorage.setItem('jinrou_coins', userCoins.toString());
+}
+
+// Unlocked Roles System
+let unlockedRoles = [];
+try {
+  const saved = localStorage.getItem('jinrou_unlocked_roles');
+  unlockedRoles = saved ? JSON.parse(saved) : [];
+} catch (e) {
+  unlockedRoles = [];
+}
+
 // Active Online Room State
 let activeRoomCode = null;
 let roomUnsubscribe = null;
 let isHost = false;
 
-// --- Werewolf Roles Definitions for 「役職確認」 ---
-const ROLES_DATA = [
-  {
-    id: 'villager',
-    name: '市民 (村人)',
-    icon: '🧑‍🌾',
-    camp: 'villager',
-    campName: '村人陣営',
-    desc: '特殊な能力はありません。昼の議論と投票で誰が嘘をついているか見極め、人狼を追放しましょう。',
-    winCondition: 'すべての人狼を処刑する'
-  },
+// --- Basic Roles Definitions for 「役職確認」 (Specified Order) ---
+const BASE_ROLES = [
   {
     id: 'werewolf',
-    name: '人狼 (ジンロウ)',
+    name: '人狼',
     icon: '🐺',
     camp: 'werewolf',
-    campName: '人狼陣営',
-    desc: '夜のターンに仲間の人狼と連携し、村人を1人選んで襲撃します。昼は村人のフリをして議論を混乱させましょう。',
-    winCondition: '人狼の数が生存村人の数と同数以上になる'
+    campName: '人狼チーム',
+    desc: '人狼チームで村人チームを夜の間に殺害できる。自分が追放されたら負け。',
+    winCondition: '村人チームの人数と同数以上になること（自身が追放されたら敗北）'
   },
   {
-    id: 'seer',
-    name: '占い師 (預言者)',
-    icon: '🔮',
+    id: 'villager',
+    name: '村人',
+    icon: '🧑‍🌾',
     camp: 'villager',
-    campName: '村人陣営',
-    desc: '毎晩、誰か1人を占うことで、その人物が「人狼」か「人狼でない」かを知ることができます。村人側の最重要キーパーソンです。',
-    winCondition: 'すべての人狼を処刑する'
+    campName: '村人チーム',
+    desc: '村人チーム。特殊能力はありませんが、昼の議論と投票で人狼を見つけ出し追放を目指します。',
+    winCondition: 'すべての人狼を追放する'
   },
   {
     id: 'medium',
-    name: '霊媒師 (霊能者)',
+    name: '霊媒師',
     icon: '🕯️',
     camp: 'villager',
-    campName: '村人陣営',
-    desc: '毎晩、その日の昼に処刑された人物が「人狼」だったのか「人狼でなかった」のかを霊視できます。占い師の真偽判定にも役立ちます。',
-    winCondition: 'すべての人狼を処刑する'
+    campName: '村人チーム',
+    desc: '村人チームで追放された人の役職がわかる。',
+    winCondition: 'すべての人狼を追放する'
   },
   {
-    id: 'knight',
-    name: '騎士 (狩人/ボディーガード)',
+    id: 'seer',
+    name: '占い師',
+    icon: '🔮',
+    camp: 'villager',
+    campName: '村人チーム',
+    desc: '夜の時に役職が何かを占える。',
+    winCondition: 'すべての人狼を追放する'
+  },
+  {
+    id: 'hunter_guard',
+    name: '狩人',
     icon: '🛡️',
     camp: 'villager',
-    campName: '村人陣営',
-    desc: '毎晩、自分以外の村人1人を指定して護衛します。人狼の襲撃対象と重なった場合、その夜の犠牲者を防ぐことができます。',
-    winCondition: 'すべての人狼を処刑する'
+    campName: '村人チーム',
+    desc: '夜の時に味方を守れる。',
+    winCondition: 'すべての人狼を追放する'
   },
   {
-    id: 'madman',
-    name: '狂人 (裏切り者)',
-    icon: '🤡',
+    id: 'traitor',
+    name: '裏切り者',
+    icon: '🎭',
     camp: 'werewolf',
-    campName: '人狼陣営',
-    desc: '人間の狂信者。誰が人狼かは分かりませんが、人狼陣営の勝利が自身の勝利となります。占い結果は「人狼でない」と出ます。',
-    winCondition: '人狼陣営が勝利する'
+    campName: '人狼チーム',
+    desc: '人狼チーム。村人陣営としてカウントされますが、人狼チームの勝利を目指します。',
+    winCondition: '人狼チームが勝利する'
+  }
+];
+
+// --- Shop Roles Definitions (Specified Order & Details) ---
+const SHOP_ROLES = [
+  {
+    id: 'mayor',
+    name: '村長',
+    icon: '🎖️',
+    cost: 100,
+    camp: 'villager',
+    campName: '村人チーム',
+    desc: '死亡時に裏切り者が誰かがわかる。村長が死亡した時、村に潜む裏切り者の正体が暴かれます。',
+    winCondition: 'すべての人狼を追放する'
   },
   {
-    id: 'fox',
-    name: '妖狐 (狐)',
-    icon: '🦊',
-    camp: 'third',
-    campName: '第三陣営',
-    desc: '村人陣営でも人狼陣営でもない単独勢力。人狼に襲撃されても死亡しませんが、占い師に占われると呪殺されます。最後まで生き残れば単独勝利！',
-    winCondition: '村人か人狼のいずれかの決着時に生存していること'
+    id: 'medic',
+    name: 'メディ',
+    icon: '💉',
+    cost: 300,
+    camp: 'villager',
+    campName: '村人チーム',
+    desc: '2日目以降の夜のターンに一度だけ味方を一人復活できる。ピンチの村人を蘇生させて形勢逆転を狙えます。',
+    winCondition: 'すべての人狼を追放する'
+  },
+  {
+    id: 'hunter_avenger',
+    name: 'ハンター',
+    icon: '🎯',
+    cost: 100,
+    camp: 'villager',
+    campName: '村人チーム',
+    desc: '追放、または死亡時味方一人を道連れにする。命を落とす瞬間に指定した相手を道連れにします。',
+    winCondition: 'すべての人狼を追放する'
+  },
+  {
+    id: 'archer',
+    name: 'アーチ',
+    icon: '🏹',
+    cost: 300,
+    camp: 'villager',
+    campName: '村人チーム',
+    desc: '弓使い。夜のターンに1度だけ人を選んで殺害できる（夜のターンに一度だけで、夜のターンに使うか使わないかを選べる）。',
+    winCondition: 'すべての人狼を追放する'
   }
 ];
 
@@ -106,7 +157,7 @@ function showToast(message) {
   if (toastTimer) clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
     toast.classList.remove('show');
-  }, 2600);
+  }, 2800);
 }
 
 // --- DOM Elements ---
@@ -114,8 +165,12 @@ const topNicknameChip = document.getElementById('topNicknameChip');
 const topNicknameText = document.getElementById('topNicknameText');
 const btnOpenSettings = document.getElementById('btnOpenSettings');
 
+const topCoinsChip = document.getElementById('topCoinsChip');
+const topCoinsDisplay = document.getElementById('topCoinsDisplay');
+
 const btnOnlinePlay = document.getElementById('btnOnlinePlay');
 const btnRoleGuide = document.getElementById('btnRoleGuide');
+const btnOpenShop = document.getElementById('btnOpenShop');
 
 // Initial Nickname Modal
 const initialNicknameModal = document.getElementById('initialNicknameModal');
@@ -143,6 +198,14 @@ const btnCloseRoleGuide = document.getElementById('btnCloseRoleGuide');
 const btnFinishRoleGuide = document.getElementById('btnFinishRoleGuide');
 const rolesList = document.getElementById('rolesList');
 const roleTabs = document.querySelectorAll('.role-tab');
+
+// Shop Modal
+const shopModal = document.getElementById('shopModal');
+const btnCloseShop = document.getElementById('btnCloseShop');
+const btnFinishShop = document.getElementById('btnFinishShop');
+const shopCoinsDisplay = document.getElementById('shopCoinsDisplay');
+const btnTestAddCoins = document.getElementById('btnTestAddCoins');
+const shopItemsList = document.getElementById('shopItemsList');
 
 // Online Play Modal
 const onlinePlayModal = document.getElementById('onlinePlayModal');
@@ -176,12 +239,30 @@ function updateNicknameDisplay(nickname) {
   settingsCharCounter.textContent = `${nickname.length} / 8`;
 }
 
+// --- Sync Coins UI ---
+function updateCoinsDisplay() {
+  if (topCoinsDisplay) topCoinsDisplay.textContent = userCoins.toLocaleString();
+  if (shopCoinsDisplay) shopCoinsDisplay.textContent = userCoins.toLocaleString();
+  localStorage.setItem('jinrou_coins', userCoins.toString());
+}
+
 // --- Save Profile to Firebase and LocalStorage ---
 function applyNickname(nickname) {
   localNickname = nickname;
   localStorage.setItem('jinrou_nickname', nickname);
   updateNicknameDisplay(nickname);
-  savePlayerProfile(localPlayerId, nickname, vcVolume);
+  savePlayerProfile(localPlayerId, nickname, vcVolume, userCoins, unlockedRoles);
+}
+
+// Debounce helper for Firebase updates
+let profileDebounce = null;
+function scheduleProfileSync() {
+  if (profileDebounce) clearTimeout(profileDebounce);
+  profileDebounce = setTimeout(() => {
+    if (localNickname) {
+      savePlayerProfile(localPlayerId, localNickname, vcVolume, userCoins, unlockedRoles);
+    }
+  }, 1000);
 }
 
 // --- VC Volume Management ---
@@ -192,7 +273,6 @@ function updateVcVolumeUI(vol) {
   localStorage.setItem('jinrou_vc_volume', vcVolume.toString());
   sound.setVcVolume(vcVolume);
 
-  // Update active preset pill
   presetPills.forEach((pill) => {
     const pVal = parseInt(pill.getAttribute('data-preset'), 10);
     if (pVal === vcVolume) {
@@ -201,17 +281,6 @@ function updateVcVolumeUI(vol) {
       pill.classList.remove('active');
     }
   });
-}
-
-// Debounce helper for Firebase updates
-let profileDebounce = null;
-function scheduleProfileSync() {
-  if (profileDebounce) clearTimeout(profileDebounce);
-  profileDebounce = setTimeout(() => {
-    if (localNickname) {
-      savePlayerProfile(localPlayerId, localNickname, vcVolume);
-    }
-  }, 1000);
 }
 
 // --- Modal Utilities ---
@@ -228,47 +297,176 @@ function closeModal(modalEl) {
 // --- Render Role Guide Cards ---
 function renderRoles(filterCamp = 'all') {
   rolesList.innerHTML = '';
-  const filtered = filterCamp === 'all' 
-    ? ROLES_DATA 
-    : ROLES_DATA.filter((r) => r.camp === filterCamp);
 
-  filtered.forEach((role) => {
+  let listToDisplay = [];
+  if (filterCamp === 'all') {
+    // 6 Base roles first, followed by Shop roles
+    listToDisplay = [...BASE_ROLES, ...SHOP_ROLES.map(r => ({ ...r, isShopRole: true }))];
+  } else if (filterCamp === 'villager') {
+    const baseV = BASE_ROLES.filter(r => r.camp === 'villager');
+    const shopV = SHOP_ROLES.filter(r => r.camp === 'villager').map(r => ({ ...r, isShopRole: true }));
+    listToDisplay = [...baseV, ...shopV];
+  } else if (filterCamp === 'werewolf') {
+    listToDisplay = BASE_ROLES.filter(r => r.camp === 'werewolf');
+  } else if (filterCamp === 'shop') {
+    listToDisplay = SHOP_ROLES.map(r => ({ ...r, isShopRole: true }));
+  }
+
+  listToDisplay.forEach((role) => {
     const card = document.createElement('div');
     card.className = 'role-card';
 
     let campBadgeClass = 'camp-villager';
     if (role.camp === 'werewolf') campBadgeClass = 'camp-werewolf';
-    if (role.camp === 'third') campBadgeClass = 'camp-third';
+
+    let shopBadgeHtml = '';
+    if (role.isShopRole) {
+      const isUnlocked = unlockedRoles.includes(role.id);
+      if (isUnlocked) {
+        shopBadgeHtml = `<span class="role-shop-badge unlocked">✅ 解放済み</span>`;
+      } else {
+        shopBadgeHtml = `<span class="role-shop-badge locked" data-role-id="${role.id}">🔒 ショップで開放 (${role.cost}C)</span>`;
+      }
+    }
 
     card.innerHTML = `
       <div class="role-card-header">
         <div class="role-name-row">
           <span>${role.icon}</span>
           <span>${role.name}</span>
+          ${shopBadgeHtml}
         </div>
         <span class="camp-badge ${campBadgeClass}">${role.campName}</span>
       </div>
       <p class="role-desc">${role.desc}</p>
       <div class="role-win-condition">🏆 勝利条件: ${role.winCondition}</div>
     `;
+
+    // Click handler for locked shop badge to jump to shop
+    const lockedBadge = card.querySelector('.role-shop-badge.locked');
+    if (lockedBadge) {
+      lockedBadge.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeModal(roleGuideModal);
+        openShopModal();
+      });
+    }
+
     rolesList.appendChild(card);
   });
 }
 
+// --- Render Shop Modal ---
+function renderShop() {
+  updateCoinsDisplay();
+  shopItemsList.innerHTML = '';
+
+  SHOP_ROLES.forEach((role) => {
+    const isUnlocked = unlockedRoles.includes(role.id);
+    const card = document.createElement('div');
+    card.className = `shop-card ${isUnlocked ? 'unlocked-card' : ''}`;
+
+    let actionBtnHtml = '';
+    if (isUnlocked) {
+      actionBtnHtml = `<span class="badge-unlocked-status">✅ 開放済み</span>`;
+    } else {
+      const canAfford = userCoins >= role.cost;
+      actionBtnHtml = `
+        <button class="btn-buy-role" data-role-id="${role.id}" ${canAfford ? '' : 'disabled'}>
+          <span>🪙 ${role.cost}コインで開放</span>
+        </button>
+      `;
+    }
+
+    card.innerHTML = `
+      <div class="shop-card-header">
+        <div class="shop-role-name">
+          <span style="font-size: 1.4rem;">${role.icon}</span>
+          <span>${role.name}</span>
+          <span class="camp-badge camp-villager">${role.campName}</span>
+        </div>
+        <span class="shop-cost-tag">🪙 ${role.cost} コイン</span>
+      </div>
+      <p class="shop-card-desc">${role.desc}</p>
+      <div class="shop-card-footer">
+        <span style="font-size: 0.78rem; color: #94a3b8;">勝利条件: ${role.winCondition}</span>
+        <div>${actionBtnHtml}</div>
+      </div>
+    `;
+
+    // Bind purchase event
+    const buyBtn = card.querySelector('.btn-buy-role');
+    if (buyBtn && !isUnlocked) {
+      buyBtn.addEventListener('click', () => {
+        handlePurchaseRole(role);
+      });
+    }
+
+    shopItemsList.appendChild(card);
+  });
+}
+
+// --- Handle Role Purchase ---
+function handlePurchaseRole(role) {
+  if (unlockedRoles.includes(role.id)) {
+    showToast(`役職「${role.name}」は既に開放済みです`);
+    return;
+  }
+  if (userCoins < role.cost) {
+    showToast(`🪙 コインが足りません（必要: ${role.cost}コイン / 所持: ${userCoins}コイン）`);
+    return;
+  }
+
+  // Deduct coins & unlock
+  userCoins -= role.cost;
+  unlockedRoles.push(role.id);
+  localStorage.setItem('jinrou_unlocked_roles', JSON.stringify(unlockedRoles));
+  updateCoinsDisplay();
+
+  // Play fanfare sound
+  sound.playUnlockSound();
+  showToast(`🎉 新役職「${role.name}」を開放しました！`);
+
+  // Sync to Firebase
+  scheduleProfileSync();
+
+  // Re-render
+  renderShop();
+  renderRoles('all');
+}
+
+function openShopModal() {
+  renderShop();
+  openModal(shopModal);
+}
+
 // --- Initial Setup / App Start ---
 function initApp() {
+  updateCoinsDisplay();
+
   // Check if nickname already exists
   if (!localNickname || !validateNickname(localNickname)) {
-    // Show initial nickname prompt modal
     initialNicknameModal.classList.add('active');
   } else {
     updateNicknameDisplay(localNickname);
     // Background fetch from Firebase
     fetchPlayerProfile(localPlayerId).then((profile) => {
-      if (profile && profile.nickname && validateNickname(profile.nickname)) {
-        localNickname = profile.nickname;
-        localStorage.setItem('jinrou_nickname', profile.nickname);
-        updateNicknameDisplay(profile.nickname);
+      if (profile) {
+        if (profile.nickname && validateNickname(profile.nickname)) {
+          localNickname = profile.nickname;
+          localStorage.setItem('jinrou_nickname', profile.nickname);
+          updateNicknameDisplay(profile.nickname);
+        }
+        if (typeof profile.coins === 'number') {
+          userCoins = profile.coins;
+          localStorage.setItem('jinrou_coins', userCoins.toString());
+          updateCoinsDisplay();
+        }
+        if (Array.isArray(profile.unlockedRoles)) {
+          unlockedRoles = profile.unlockedRoles;
+          localStorage.setItem('jinrou_unlocked_roles', JSON.stringify(unlockedRoles));
+        }
+        renderRoles('all');
       }
     });
   }
@@ -366,6 +564,8 @@ btnTestVolume.addEventListener('click', () => {
 
 // --- Event Listeners: 役職確認 (Role Guide) ---
 btnRoleGuide.addEventListener('click', () => {
+  renderRoles('all');
+  roleTabs.forEach(t => t.classList.toggle('active', t.getAttribute('data-camp') === 'all'));
   openModal(roleGuideModal);
 });
 
@@ -380,6 +580,29 @@ roleTabs.forEach((tab) => {
     const camp = tab.getAttribute('data-camp');
     renderRoles(camp);
   });
+});
+
+// --- Event Listeners: ショップ (Role Shop) ---
+btnOpenShop.addEventListener('click', () => {
+  openShopModal();
+});
+
+topCoinsChip.addEventListener('click', () => {
+  openShopModal();
+});
+
+btnCloseShop.addEventListener('click', () => closeModal(shopModal));
+btnFinishShop.addEventListener('click', () => closeModal(shopModal));
+
+// Test Coin Add Button
+btnTestAddCoins.addEventListener('click', () => {
+  sound.playCoinSound();
+  userCoins += 100;
+  updateCoinsDisplay();
+  scheduleProfileSync();
+  renderShop();
+  renderRoles('all');
+  showToast(`🪙 100コインを獲得しました！(所持: ${userCoins}コイン)`);
 });
 
 // --- Event Listeners: オンラインプレイ (Online Play) ---

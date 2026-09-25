@@ -44,13 +44,15 @@ if (typeof window !== "undefined") {
 }
 
 // User Profile Helpers
-export async function savePlayerProfile(playerId, nickname, vcVolume = 100) {
+export async function savePlayerProfile(playerId, nickname, vcVolume = 100, coins = 500, unlockedRoles = []) {
   if (!playerId || !nickname) return;
   try {
     const userRef = doc(db, "players", playerId);
     await setDoc(userRef, {
       nickname: nickname.trim(),
       vcVolume: Number(vcVolume) || 100,
+      coins: typeof coins === 'number' ? coins : 500,
+      unlockedRoles: Array.isArray(unlockedRoles) ? unlockedRoles : [],
       updatedAt: serverTimestamp()
     }, { merge: true });
   } catch (err) {

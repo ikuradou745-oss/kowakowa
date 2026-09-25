@@ -146,6 +146,40 @@
       white-space: nowrap;
     }
 
+    .coins-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(251, 191, 36, 0.12);
+      border: 1px solid rgba(251, 191, 36, 0.4);
+      border-radius: 9999px;
+      padding: 8px 14px;
+      font-size: 0.92rem;
+      font-weight: 800;
+      color: var(--moon-gold);
+      backdrop-filter: blur(8px);
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .coins-chip:hover {
+      background: rgba(251, 191, 36, 0.22);
+      border-color: rgba(251, 191, 36, 0.8);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(251, 191, 36, 0.25);
+    }
+
+    .coins-chip .coin-icon {
+      font-size: 1rem;
+    }
+
+    .coins-chip .coin-unit {
+      font-size: 0.75rem;
+      opacity: 0.8;
+      margin-left: 1px;
+    }
+
     .btn-settings {
       display: flex;
       align-items: center;
@@ -275,6 +309,28 @@
     }
 
     .btn-role-guide:active {
+      transform: translateY(1px);
+    }
+
+    .btn-shop {
+      background: linear-gradient(135deg, #b45309 0%, #78350f 100%);
+      color: #ffffff;
+      border: 1px solid rgba(251, 191, 36, 0.45);
+      box-shadow: 
+        0 8px 24px rgba(180, 83, 9, 0.35),
+        inset 0 1px 1px rgba(255, 255, 255, 0.25);
+    }
+
+    .btn-shop:hover {
+      background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+      border-color: rgba(251, 191, 36, 0.7);
+      transform: translateY(-2px);
+      box-shadow: 
+        0 12px 32px rgba(245, 158, 11, 0.45),
+        inset 0 1px 1px rgba(255, 255, 255, 0.4);
+    }
+
+    .btn-shop:active {
       transform: translateY(1px);
     }
 
@@ -684,6 +740,195 @@
       font-weight: 600;
     }
 
+    .role-shop-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 6px;
+      margin-left: 6px;
+    }
+
+    .role-shop-badge.unlocked {
+      background: rgba(34, 197, 94, 0.15);
+      border: 1px solid rgba(34, 197, 94, 0.4);
+      color: #4ade80;
+    }
+
+    .role-shop-badge.locked {
+      background: rgba(251, 191, 36, 0.15);
+      border: 1px solid rgba(251, 191, 36, 0.4);
+      color: #fbbf24;
+      cursor: pointer;
+    }
+
+    .role-shop-badge.locked:hover {
+      background: rgba(251, 191, 36, 0.28);
+    }
+
+    /* Shop Modal Styles */
+    .shop-balance-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(18, 24, 38, 0.9);
+      border: 1px solid rgba(251, 191, 36, 0.35);
+      border-radius: 12px;
+      padding: 12px 16px;
+      margin-bottom: 12px;
+    }
+
+    .shop-coin-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .shop-coin-display {
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+      font-size: 1.35rem;
+      font-weight: 900;
+      color: var(--moon-gold);
+      letter-spacing: 0.05em;
+    }
+
+    .btn-test-coin {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(251, 191, 36, 0.15);
+      border: 1px solid rgba(251, 191, 36, 0.4);
+      color: #fbbf24;
+      font-size: 0.78rem;
+      font-weight: 800;
+      padding: 6px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn-test-coin:hover {
+      background: rgba(251, 191, 36, 0.3);
+      transform: translateY(-1px);
+    }
+
+    .btn-test-coin:active {
+      transform: translateY(1px);
+    }
+
+    .shop-items-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 52vh;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .shop-card {
+      background: rgba(10, 15, 26, 0.85);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 16px;
+      transition: all 0.2s ease;
+    }
+
+    .shop-card.unlocked-card {
+      border-color: rgba(34, 197, 94, 0.35);
+      background: rgba(10, 24, 20, 0.65);
+    }
+
+    .shop-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .shop-role-name {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .shop-cost-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(251, 191, 36, 0.15);
+      border: 1px solid rgba(251, 191, 36, 0.35);
+      padding: 3px 10px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 800;
+      color: var(--moon-gold);
+    }
+
+    .shop-card-desc {
+      font-size: 0.86rem;
+      color: #cbd5e1;
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+
+    .shop-card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding-top: 10px;
+    }
+
+    .btn-buy-role {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+      color: #ffffff;
+      border: 1px solid rgba(251, 191, 36, 0.5);
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(217, 119, 6, 0.3);
+      transition: all 0.15s ease;
+    }
+
+    .btn-buy-role:hover:not(:disabled) {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(245, 158, 11, 0.4);
+    }
+
+    .btn-buy-role:disabled {
+      background: rgba(51, 65, 85, 0.5);
+      border-color: rgba(255, 255, 255, 0.1);
+      color: #94a3b8;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .badge-unlocked-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(34, 197, 94, 0.18);
+      border: 1px solid rgba(34, 197, 94, 0.4);
+      color: #4ade80;
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 800;
+    }
+
     /* Online Play Modal Specific */
     .online-grid {
       display: grid;
@@ -855,6 +1100,13 @@
       </div>
 
       <div class="top-right-bar">
+        <!-- Shop Coins Chip -->
+        <div class="coins-chip" id="topCoinsChip" title="役職ショップを開く">
+          <span class="coin-icon">🪙</span>
+          <span id="topCoinsDisplay">500</span>
+          <span class="coin-unit">C</span>
+        </div>
+
         <div class="nickname-chip" id="topNicknameChip" title="あなたのニックネーム">
           <span class="user-icon">👤</span>
           <span class="nick-text" id="topNicknameText">ゲスト</span>
@@ -866,7 +1118,7 @@
       </div>
     </header>
 
-    <!-- Center Section: 2 Core Buttons ("オンラインプレイ" & "役職確認") -->
+    <!-- Center Section: 3 Actions ("オンラインプレイ", "役職確認", "ショップ") -->
     <main class="center-section">
       <div class="game-hero">
         <h1 class="game-main-title">人狼</h1>
@@ -884,6 +1136,12 @@
         <button class="btn-main-action btn-role-guide" id="btnRoleGuide">
           <span class="btn-icon">📜</span>
           <span>役職確認</span>
+        </button>
+
+        <!-- 3. ショップ (役職解放) -->
+        <button class="btn-main-action btn-shop" id="btnOpenShop">
+          <span class="btn-icon">🛍️</span>
+          <span>役職ショップ</span>
         </button>
       </div>
     </main>
@@ -1022,9 +1280,9 @@
       <!-- Filter tabs -->
       <div class="role-tabs">
         <button class="role-tab active" data-camp="all">すべて</button>
-        <button class="role-tab" data-camp="villager">村人陣営</button>
-        <button class="role-tab" data-camp="werewolf">人狼陣営</button>
-        <button class="role-tab" data-camp="third">第三陣営</button>
+        <button class="role-tab" data-camp="villager">村人チーム</button>
+        <button class="role-tab" data-camp="werewolf">人狼チーム</button>
+        <button class="role-tab" data-camp="shop">ショップ開放役職</button>
       </div>
 
       <!-- Role list container -->
@@ -1034,6 +1292,43 @@
 
       <div class="modal-actions-bar">
         <button class="btn-secondary" id="btnFinishRoleGuide" style="width: 100%;">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Role Shop Modal (ショップ: 新たな役職を開放) -->
+  <div class="modal-overlay" id="shopModal">
+    <div class="modal-card" style="max-width: 580px;">
+      <div class="modal-header">
+        <h2 class="modal-title">🛍️ 役職ショップ</h2>
+        <button class="btn-modal-close" id="btnCloseShop" aria-label="閉じる">✕</button>
+      </div>
+
+      <!-- Coin balance banner & test claim button -->
+      <div class="shop-balance-bar">
+        <div class="shop-coin-info">
+          <span style="font-size: 0.88rem; font-weight: 700; color: #94a3b8;">所持コイン:</span>
+          <div class="shop-coin-display">
+            <span class="coin-icon">🪙</span>
+            <span id="shopCoinsDisplay">500</span>
+            <span style="font-size: 0.85rem; color: #fbbf24; font-weight: 700;">コイン</span>
+          </div>
+        </div>
+        <button class="btn-test-coin" id="btnTestAddCoins" title="テスト用コインチャージ">
+          <span>➕ 100コイン獲得 (テスト)</span>
+        </button>
+      </div>
+      <p style="font-size: 0.78rem; color: #94a3b8; margin: -4px 0 16px 2px;">
+        ※ コインを使用して新たな役職を開放できます（解放された役職は保存されます）
+      </p>
+
+      <!-- Shop items list -->
+      <div class="shop-items-list" id="shopItemsList">
+        <!-- Rendered via JavaScript -->
+      </div>
+
+      <div class="modal-actions-bar">
+        <button class="btn-secondary" id="btnFinishShop" style="width: 100%;">閉じる</button>
       </div>
     </div>
   </div>

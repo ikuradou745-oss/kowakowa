@@ -140,4 +140,51 @@ export class WerewolfAudio {
       osc.stop(now + 2.7);
     } catch (e) {}
   }
+
+  // Coin sound
+  playCoinSound() {
+    this.init();
+    if (!this.ctx) return;
+    try {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      const now = this.ctx.currentTime;
+      osc.frequency.setValueAtTime(987.77, now);
+      osc.frequency.setValueAtTime(1318.51, now + 0.07);
+
+      gain.gain.setValueAtTime(0.14, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+      osc.start(now);
+      osc.stop(now + 0.32);
+    } catch (e) {}
+  }
+
+  // Grand Role Unlocked Fanfare sound
+  playUnlockSound() {
+    this.init();
+    if (!this.ctx) return;
+    try {
+      const notes = [440, 554.37, 659.25, 880];
+      const now = this.ctx.currentTime;
+      notes.forEach((freq, idx) => {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        const start = now + idx * 0.08;
+        osc.frequency.setValueAtTime(freq, start);
+
+        gain.gain.setValueAtTime(0.16, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.4);
+
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start(start);
+        osc.stop(start + 0.42);
+      });
+    } catch (e) {}
+  }
 }
