@@ -116,9 +116,79 @@ function getRoomSnapshot(room) {
   };
 }
 
-// REST fallback APIs
+// REST APIs
+const jinrouRooms = new Map(); // roomCode -> roomData
+
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', app: 'jinrou-online', activeRooms: rooms.size });
+  res.json({ status: 'ok', app: 'jinrou-online', activeRooms: jinrouRooms.size });
+});
+
+app.post('/api/jinrou/rooms', (req, res) => {
+  const roomData = req.body;
+  if (!roomData || !roomData.code) {
+    return res.status(400).json({ error: 'Invalid room data' });
+  }
+  jinrouRooms.set(roomData.code, {
+    ...roomData,
+    updatedAt: Date.now()
+  });
+  console.log(`[jinrou-online] Room #${roomData.code} created on server.`);
+  res.json(roomData);
+});
+
+app.get('/api/jinrou/rooms/:code', (req, res) => {
+  const room = jinrouRooms.get(req.params.code);
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+  res.json(room);
+});
+
+app.post('/api/jinrou/rooms/:code/join', (req, res) => {
+  const { playerId, playerNickname } = req.body;
+  const room = jinrouRooms.get(req.params.code);
+  if (!room) return res.status(404).json({ error: '部屋が見つかりませんでした' });
+
+  if (room.status && room.status !== 'waiting') {
+    return res.status(400).json({ error: 'ゲームが既に開始されています' });
+  }
+
+  const currentCount = Object.keys(room.players || {}).length;
+  const max = room.maxPlayers || 12;
+  if (currentCount >= max && !room.players[playerId]) {
+    return res.status(400).json({ error: `部屋が満員です（定員: ${max}人）` });
+  }
+
+  room.players = room.players || {};
+  room.players[playerId] = {
+    id: playerId,
+    nickname: playerNickname,
+    isHost: (room.hostId === playerId),
+    isLeader: (room.hostId === playerId),
+    role: null,
+    isAlive: true,
+    joinedAt: Date.now()
+  };
+  room.updatedAt = Date.now();
+  res.json(room);
+});
+
+app.post('/api/jinrou/rooms/:code/leave', (req, res) => {
+  const { playerId } = req.body;
+  const room = jinrouRooms.get(req.params.code);
+  if (!room) return res.json({ success: true });
+
+  if (room.players && room.players[playerId]) {
+    delete room.players[playerId];
+    if (Object.keys(room.players).length === 0) {
+      jinrouRooms.delete(req.params.code);
+      console.log(`[jinrou-online] Room #${req.params.code} closed (empty).`);
+    } else if (room.hostId === playerId) {
+      const remaining = Object.keys(room.players);
+      room.hostId = remaining[0];
+      room.players[remaining[0]].isHost = true;
+      room.players[remaining[0]].isLeader = true;
+    }
+  }
+  res.json({ success: true });
 });
 
 app.get('/api/rooms/:code', (req, res) => {

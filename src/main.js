@@ -24,11 +24,11 @@ if (isNaN(vcVolume) || vcVolume < 50 || vcVolume > 500) {
 }
 sound.setVcVolume(vcVolume);
 
-// Coin System (Defaults to 500 so user can test-unlock roles immediately)
+// Coin System (Initial coins is 0, test-increasing feature removed)
 let userCoins = parseInt(localStorage.getItem('jinrou_coins'), 10);
-if (isNaN(userCoins) || userCoins < 0) {
-  userCoins = 500;
-  localStorage.setItem('jinrou_coins', userCoins.toString());
+if (isNaN(userCoins) || userCoins < 0 || userCoins === 500) {
+  userCoins = 0;
+  localStorage.setItem('jinrou_coins', '0');
 }
 
 // Unlocked Roles System
@@ -278,7 +278,6 @@ const shopModal = document.getElementById('shopModal');
 const btnCloseShop = document.getElementById('btnCloseShop');
 const btnFinishShop = document.getElementById('btnFinishShop');
 const shopCoinsDisplay = document.getElementById('shopCoinsDisplay');
-const btnTestAddCoins = document.getElementById('btnTestAddCoins');
 const shopItemsList = document.getElementById('shopItemsList');
 
 // Online Play Modal
@@ -779,7 +778,7 @@ function initApp() {
           updateNicknameDisplay(profile.nickname);
         }
         if (typeof profile.coins === 'number') {
-          userCoins = profile.coins;
+          userCoins = (profile.coins === 500 || profile.coins < 0) ? 0 : profile.coins;
           localStorage.setItem('jinrou_coins', userCoins.toString());
           updateCoinsDisplay();
         }
@@ -926,17 +925,6 @@ topCoinsChip.addEventListener('click', () => {
 
 btnCloseShop.addEventListener('click', () => closeModal(shopModal));
 btnFinishShop.addEventListener('click', () => closeModal(shopModal));
-
-// Test Coin Add Button
-btnTestAddCoins.addEventListener('click', () => {
-  sound.playCoinSound();
-  userCoins += 100;
-  updateCoinsDisplay();
-  scheduleProfileSync();
-  renderShop();
-  renderRoles('all');
-  showToast(`🪙 100コインを獲得しました！(所持: ${userCoins}コイン)`);
-});
 
 // --- Event Listeners: オンラインプレイ (Online Play) ---
 btnOnlinePlay.addEventListener('click', () => {
