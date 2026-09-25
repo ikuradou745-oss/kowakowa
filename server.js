@@ -189,15 +189,33 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', app: 'jinrou-online', activeRooms: rooms.size });
 });
 
+app.get('/api/jinrou/rooms', (req, res) => {
+  const list = [];
+  for (const room of rooms.values()) {
+    if (room.status === 'waiting') {
+      list.push({
+        code: room.code,
+        hostNickname: room.hostNickname,
+        playerCount: room.players.size,
+        maxPlayers: room.maxPlayers,
+        roleMode: room.roleMode,
+        discussionTime: room.discussionTime
+      });
+    }
+  }
+  res.json({ rooms: list });
+});
+
 app.get('/api/jinrou/rooms/:code', (req, res) => {
-  const room = rooms.get(req.params.code);
-  if (!room) return res.status(404).json({ error: '部屋が見つかりませんでした' });
+  const cleanCode = (req.params.code || '').toString().replace(/^[#＃]/, '').trim();
+  const room = rooms.get(cleanCode);
+  if (!room) return res.status(404).json({ error: `部屋（#${cleanCode}）が見つかりませんでした` });
   res.json(getRoomSnapshot(room));
 });
 
 app.post('/api/jinrou/rooms', (req, res) => {
   const data = req.body || {};
-  const code = (data.code || generateRoomCode()).toString();
+  const code = (data.code || generateRoomCode()).toString().replace(/^[#＃]/, '').trim();
   const hostId = data.hostId || 'host_' + Date.now();
   const hostNickname = data.hostNickname || 'ホスト';
 
@@ -220,6 +238,14 @@ app.post('/api/jinrou/rooms', (req, res) => {
       timerInterval: null
     };
     rooms.set(code, room);
+  } else {
+    room.hostId = hostId;
+    room.hostNickname = hostNickname;
+    if (data.maxPlayers) room.maxPlayers = Number(data.maxPlayers);
+    if (data.discussionTime) room.discussionTime = Number(data.discussionTime);
+    if (data.roleMode) room.roleMode = data.roleMode;
+    if (data.rolesConfig) room.rolesConfig = data.rolesConfig;
+    if (data.rolesList) room.rolesList = data.rolesList;
   }
 
   room.players.set(hostId, {
@@ -233,14 +259,17 @@ app.post('/api/jinrou/rooms', (req, res) => {
     joinedAt: Date.now()
   });
 
-  res.json(getRoomSnapshot(room));
+  const snap = getRoomSnapshot(room);
+  broadcastToRoom(code, { type: 'ROOM_UPDATE', payload: snap });
+  res.json(snap);
 });
 
 app.post('/api/jinrou/rooms/:code/join', (req, res) => {
+  const cleanCode = (req.params.code || '').toString().replace(/^[#＃]/, '').trim();
   const { playerId, playerNickname } = req.body;
-  const room = rooms.get(req.params.code);
-  if (!room) return res.status(404).json({ error: '部屋が見つかりませんでした' });
-  if (room.status !== 'waiting') return res.status(400).json({ error: 'ゲームが既に開始されています' });
+  const room = rooms.get(cleanCode);
+  if (!room) return res.status(404).json({ error: `部屋（#${cleanCode}）が見つかりませんでした。コードをご確認ください。` });
+  if (room.status !== 'waiting') return res.status(400).json({ error: 'ゲームが既に開始されているか終了しています。' });
   if (room.players.size >= (room.maxPlayers || 12) && !room.players.has(playerId)) {
     return res.status(400).json({ error: `部屋が満員です（定員: ${room.maxPlayers}人）` });
   }
@@ -256,18 +285,23 @@ app.post('/api/jinrou/rooms/:code/join', (req, res) => {
     joinedAt: Date.now()
   });
 
-  res.json(getRoomSnapshot(room));
+  const snap = getRoomSnapshot(room);
+  broadcastToRoom(cleanCode, { type: 'ROOM_UPDATE', payload: snap });
+  res.json(snap);
 });
 
 app.post('/api/jinrou/rooms/:code/leave', (req, res) => {
+  const cleanCode = (req.params.code || '').toString().replace(/^[#＃]/, '').trim();
   const { playerId } = req.body;
-  const room = rooms.get(req.params.code);
+  const room = rooms.get(cleanCode);
   if (room) {
     room.players.delete(playerId);
     room.sockets.delete(playerId);
     if (room.players.size === 0) {
       if (room.timerInterval) clearInterval(room.timerInterval);
-      rooms.delete(req.params.code);
+      rooms.delete(cleanCode);
+    } else {
+      broadcastToRoom(cleanCode, { type: 'ROOM_UPDATE', payload: getRoomSnapshot(room) });
     }
   }
   res.json({ success: true });
@@ -291,26 +325,38 @@ wss.on('connection', (ws) => {
 
       switch (type) {
         case 'CREATE_ROOM': {
-          const code = (payload.code || generateRoomCode()).toString();
+          const code = (payload.code || generateRoomCode()).toString().replace(/^[#＃]/, '').trim();
           clientRoomCode = code;
           clientPlayerId = payload.playerId;
 
-          const room = {
-            code,
-            hostId: payload.playerId,
-            hostNickname: payload.nickname || 'ホスト',
-            status: 'waiting',
-            maxPlayers: Number(payload.maxPlayers) || 5,
-            discussionTime: Number(payload.discussionTime) || 60,
-            roleMode: payload.roleMode || 'normal',
-            rolesConfig: payload.rolesConfig || {},
-            rolesList: payload.rolesList || [],
-            players: new Map(),
-            sockets: new Map(),
-            chatHistory: [],
-            game: null,
-            timerInterval: null
-          };
+          let room = rooms.get(code);
+          if (!room) {
+            room = {
+              code,
+              hostId: payload.playerId,
+              hostNickname: payload.nickname || 'ホスト',
+              status: 'waiting',
+              maxPlayers: Number(payload.maxPlayers) || 5,
+              discussionTime: Number(payload.discussionTime) || 60,
+              roleMode: payload.roleMode || 'normal',
+              rolesConfig: payload.rolesConfig || {},
+              rolesList: payload.rolesList || [],
+              players: new Map(),
+              sockets: new Map(),
+              chatHistory: [],
+              game: null,
+              timerInterval: null
+            };
+            rooms.set(code, room);
+          } else {
+            room.hostId = payload.playerId;
+            room.hostNickname = payload.nickname || room.hostNickname || 'ホスト';
+            if (payload.maxPlayers) room.maxPlayers = Number(payload.maxPlayers);
+            if (payload.discussionTime) room.discussionTime = Number(payload.discussionTime);
+            if (payload.roleMode) room.roleMode = payload.roleMode;
+            if (payload.rolesConfig) room.rolesConfig = payload.rolesConfig;
+            if (payload.rolesList) room.rolesList = payload.rolesList;
+          }
 
           room.players.set(payload.playerId, {
             id: payload.playerId,
@@ -323,17 +369,18 @@ wss.on('connection', (ws) => {
             joinedAt: Date.now()
           });
           room.sockets.set(payload.playerId, ws);
-          rooms.set(code, room);
 
+          const snap = getRoomSnapshot(room);
           ws.send(JSON.stringify({
             type: 'ROOM_CREATED',
-            payload: getRoomSnapshot(room)
+            payload: snap
           }));
+          broadcastToRoom(code, { type: 'ROOM_UPDATE', payload: snap });
           break;
         }
 
         case 'JOIN_ROOM': {
-          const code = (payload.code || '').toString().trim();
+          const code = (payload.code || '').toString().replace(/^[#＃]/, '').trim();
           const room = rooms.get(code);
           if (!room) {
             return ws.send(JSON.stringify({
@@ -344,7 +391,7 @@ wss.on('connection', (ws) => {
           if (room.status !== 'waiting') {
             return ws.send(JSON.stringify({
               type: 'ERROR',
-              payload: { message: 'ゲームが既に開始されています。' }
+              payload: { message: 'ゲームが既に開始されているか終了しています。' }
             }));
           }
           if (room.players.size >= (room.maxPlayers || 12) && !room.players.has(payload.playerId)) {

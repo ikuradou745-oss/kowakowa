@@ -1284,21 +1284,35 @@
         </div>
 
         <div id="joinRoomForm" style="display: none; background: #f8fafc; border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; margin-top: 10px;">
-          <label class="form-label" for="roomCodeInput">4桁の部屋コード</label>
+          <label class="form-label" for="roomCodeInput">4桁の部屋コードを入力</label>
           <div style="display: flex; gap: 8px;">
             <input 
               type="text" 
               id="roomCodeInput" 
               class="text-input" 
-              placeholder="例: 1234" 
-              maxlength="4" 
-              pattern="\d*"
+              placeholder="例: 1234 (#1234も可)" 
+              maxlength="8" 
+              pattern="[0-9#＃]*"
               inputmode="numeric"
-              style="letter-spacing: 0.15em; font-weight: 800; font-size: 1.2rem; text-align: center;"
+              style="letter-spacing: 0.12em; font-weight: 800; font-size: 1.15rem; text-align: center;"
             />
             <button class="btn-primary" id="btnJoinRoomSubmit" style="flex: 0 0 90px;">参加</button>
           </div>
+          <div style="font-size: 0.76rem; color: var(--text-muted); margin-top: 5px;">
+            ※「#1234」のように#やスペースが付いていても自動認識されます
+          </div>
           <div class="input-error-msg" id="joinRoomErrorMsg" style="margin-top: 6px;"></div>
+
+          <!-- Active Rooms List -->
+          <div style="margin-top: 14px; border-top: 1px dashed var(--border-color); padding-top: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-size: 0.8rem; font-weight: 800; color: var(--text-sub);">🌐 現在募集中の部屋一覧</span>
+              <button id="btnRefreshActiveRooms" type="button" class="btn-secondary" style="padding: 2px 8px; font-size: 0.72rem;">🔄 更新</button>
+            </div>
+            <div id="activeRoomsList" style="display: flex; flex-direction: column; gap: 6px; max-height: 140px; overflow-y: auto;">
+              <div style="font-size: 0.78rem; color: var(--text-muted); text-align: center; padding: 8px;">部屋コードを入力するか、一覧から選択してください</div>
+            </div>
+          </div>
         </div>
       </div>
 

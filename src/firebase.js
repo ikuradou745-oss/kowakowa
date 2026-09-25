@@ -131,16 +131,19 @@ export async function fetchPlayerProfile(playerId) {
 // --- Online Werewolf Room Management Helpers ---
 
 export async function createFirestoreRoom(roomCode, hostId, hostNickname, settings = {}) {
+  const cleanCode = (roomCode || '').toString().replace(/^[#＃]/, '').trim();
   const maxPlayers = Number(settings.maxPlayers) || 5;
   const roleMode = settings.roleMode || 'normal';
   const rolesConfig = settings.rolesConfig || {};
   const rolesList = settings.rolesList || [];
+  const discussionTime = Number(settings.discussionTime) || 60;
 
   const roomData = {
-    code: roomCode,
+    code: cleanCode,
     hostId,
     hostNickname,
     maxPlayers,
+    discussionTime,
     roleMode,
     rolesConfig,
     rolesList,
@@ -164,53 +167,70 @@ export async function createFirestoreRoom(roomCode, hostId, hostNickname, settin
   // 1. Immediately store in local memory & storage so UI is INSTANTANEOUS
   saveRoomLocally(roomData);
 
-  // 2. Asynchronously sync to local Express server API if running
+  // 2. Synchronously notify local Express server API if running
   try {
-    fetch('/api/jinrou/rooms', {
+    await withTimeout(fetch('/api/jinrou/rooms', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(roomData)
-    }).catch(() => {});
-  } catch (e) {}
+    }), 2000);
+  } catch (e) {
+    console.warn("[Server Sync] Notice on room create:", e.message);
+  }
 
   // 3. Sync to Firebase Firestore in the background (fire-and-forget with timeout safeguard)
   try {
-    const roomRef = doc(db, "jinrou_rooms", roomCode);
+    const roomRef = doc(db, "jinrou_rooms", cleanCode);
     withTimeout(setDoc(roomRef, {
       ...roomData,
       createdAt: serverTimestamp()
-    }), 3000)
-      .then(() => console.log("[Firebase] Room created successfully in Firestore:", roomCode))
-      .catch((err) => console.warn("[Firebase] Firestore sync notice (hybrid mode active):", err.message));
+    }), 2500)
+      .then(() => console.log("[Firebase] Room created successfully in Firestore:", cleanCode))
+      .catch((err) => console.warn("[Firebase] Firestore sync notice (server mode active):", err.message));
   } catch (err) {
     console.warn("[Firebase] Firestore sync notice:", err);
   }
 
-  // Return immediately so the user transitions to the lobby in 0ms!
+  // Return immediately so the user transitions to the lobby
   return roomData;
 }
 
 export async function joinFirestoreRoom(roomCode, playerId, playerNickname) {
+  const cleanCode = (roomCode || '').toString().replace(/^[#＃]/, '').trim();
   let roomData = null;
 
-  // 1. Check local cache
-  roomData = getRoomLocally(roomCode);
+  // 1. Check Express server API first (authoritative and returns updated players list)
+  try {
+    const res = await withTimeout(fetch(`/api/jinrou/rooms/${cleanCode}/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId, playerNickname })
+    }), 2500);
 
-  // 2. Check Express server API if local not found or outdated
-  if (!roomData) {
-    try {
-      const res = await withTimeout(fetch(`/api/jinrou/rooms/${roomCode}`), 1000);
-      if (res.ok) {
-        roomData = await res.json();
+    if (res.ok) {
+      roomData = await res.json();
+      saveRoomLocally(roomData);
+      return roomData;
+    } else {
+      const errJson = await res.json().catch(() => ({}));
+      if (errJson.error && res.status !== 404) {
+        throw new Error(errJson.error);
       }
-    } catch (e) {}
+    }
+  } catch (err) {
+    if (err.message && !err.message.includes('Timeout') && !err.message.includes('Failed to fetch')) {
+      throw err;
+    }
   }
 
-  // 3. Check Firestore
+  // 2. Fallback: check local cache (e.g. for offline or single-machine testing)
+  roomData = getRoomLocally(cleanCode);
+
+  // 3. Fallback: check Firestore
   if (!roomData) {
     try {
-      const roomRef = doc(db, "jinrou_rooms", roomCode);
-      const snap = await withTimeout(getDoc(roomRef), 1200);
+      const roomRef = doc(db, "jinrou_rooms", cleanCode);
+      const snap = await withTimeout(getDoc(roomRef), 1500);
       if (snap && snap.exists()) {
         roomData = snap.data();
       }
@@ -218,7 +238,7 @@ export async function joinFirestoreRoom(roomCode, playerId, playerNickname) {
   }
 
   if (!roomData) {
-    throw new Error(`部屋（#${roomCode}）が見つかりませんでした。コードをご確認ください。`);
+    throw new Error(`部屋（#${cleanCode}）が見つかりませんでした。コードをご確認ください。`);
   }
 
   if (roomData.status !== "waiting") {
@@ -252,31 +272,23 @@ export async function joinFirestoreRoom(roomCode, playerId, playerNickname) {
   // Save locally
   saveRoomLocally(updatedRoom);
 
-  // Sync to Express server API
+  // Non-blocking sync to Firestore
   try {
-    fetch(`/api/jinrou/rooms/${roomCode}/join`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ playerId, playerNickname })
-    }).catch(() => {});
-  } catch (e) {}
-
-  // Sync to Firestore (non-blocking)
-  try {
-    const roomRef = doc(db, "jinrou_rooms", roomCode);
+    const roomRef = doc(db, "jinrou_rooms", cleanCode);
     withTimeout(updateDoc(roomRef, {
       players: updatedPlayers
-    }), 1200).catch(() => {});
+    }), 1500).catch(() => {});
   } catch (e) {}
 
   return updatedRoom;
 }
 
 export function subscribeToRoom(roomCode, onUpdate, onError) {
+  const cleanCode = (roomCode || '').toString().replace(/^[#＃]/, '').trim();
   let isUnsubscribed = false;
 
   // 1. Initial fire from local cache
-  const initialLocal = getRoomLocally(roomCode);
+  const initialLocal = getRoomLocally(cleanCode);
   if (initialLocal) {
     onUpdate(initialLocal);
   }
@@ -284,7 +296,7 @@ export function subscribeToRoom(roomCode, onUpdate, onError) {
   // 2. Listen to cross-tab BroadcastChannel
   const handleBroadcast = (evt) => {
     if (isUnsubscribed) return;
-    if (evt.data && evt.data.type === "ROOM_UPDATED" && evt.data.room && evt.data.room.code === roomCode) {
+    if (evt.data && evt.data.type === "ROOM_UPDATED" && evt.data.room && evt.data.room.code === cleanCode) {
       onUpdate(evt.data.room);
     }
   };
@@ -297,7 +309,7 @@ export function subscribeToRoom(roomCode, onUpdate, onError) {
   const pollTimer = setInterval(async () => {
     if (isUnsubscribed) return;
     try {
-      const res = await fetch(`/api/jinrou/rooms/${roomCode}`);
+      const res = await fetch(`/api/jinrou/rooms/${cleanCode}`);
       if (res.ok) {
         const data = await res.json();
         saveRoomLocally(data);
@@ -309,7 +321,7 @@ export function subscribeToRoom(roomCode, onUpdate, onError) {
   // 4. Firestore onSnapshot real-time subscription
   let firestoreUnsub = () => {};
   try {
-    const roomRef = doc(db, "jinrou_rooms", roomCode);
+    const roomRef = doc(db, "jinrou_rooms", cleanCode);
     firestoreUnsub = onSnapshot(roomRef, (docSnap) => {
       if (isUnsubscribed) return;
       if (docSnap.exists()) {
@@ -318,7 +330,7 @@ export function subscribeToRoom(roomCode, onUpdate, onError) {
         onUpdate(data);
       }
     }, (error) => {
-      console.warn("[Firebase] Firestore subscription notice (using local/server sync):", error.message);
+      console.warn("[Firebase] Firestore subscription notice:", error.message);
     });
   } catch (err) {
     console.warn("[Firebase] onSnapshot setup notice:", err);

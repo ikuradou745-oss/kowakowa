@@ -5,19 +5,24 @@ import {
   fetchPlayerProfile, 
   createFirestoreRoom, 
   joinFirestoreRoom, 
-  leaveFirestoreRoom 
+  leaveFirestoreRoom,
+  subscribeToRoom 
 } from './firebase.js';
 
 // --- State Variables ---
 const sound = new WerewolfAudio();
 
-let localPlayerId = localStorage.getItem('jinrou_player_id');
+// Use sessionStorage so each tab/window in the same browser has its own independent player ID,
+// enabling multiple players on the same machine/browser without ID conflicts!
+let localPlayerId = sessionStorage.getItem('jinrou_player_id');
 if (!localPlayerId) {
   localPlayerId = 'usr_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36).substring(4);
-  localStorage.setItem('jinrou_player_id', localPlayerId);
+  sessionStorage.setItem('jinrou_player_id', localPlayerId);
 }
+// Keep localStorage player ID synced as fallback
+localStorage.setItem('jinrou_player_id', localPlayerId);
 
-let localNickname = localStorage.getItem('jinrou_nickname') || '';
+let localNickname = sessionStorage.getItem('jinrou_nickname') || localStorage.getItem('jinrou_nickname') || '';
 let vcVolume = parseInt(localStorage.getItem('jinrou_vc_volume'), 10);
 if (isNaN(vcVolume) || vcVolume < 50 || vcVolume > 500) {
   vcVolume = 100;
@@ -392,8 +397,22 @@ function initWebSocket() {
 initWebSocket();
 
 function sendWs(type, payload) {
+  const msgStr = JSON.stringify({ type, payload });
   if (socket && socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({ type, payload }));
+    try { socket.send(msgStr); } catch (e) {}
+    return;
+  }
+  if (socket && socket.readyState === WebSocket.CONNECTING) {
+    socket.addEventListener('open', () => {
+      try { socket.send(msgStr); } catch (e) {}
+    }, { once: true });
+    return;
+  }
+  initWebSocket();
+  if (socket) {
+    socket.addEventListener('open', () => {
+      try { socket.send(msgStr); } catch (e) {}
+    }, { once: true });
   }
 }
 
@@ -869,6 +888,8 @@ ${hostNick}が呼んでるよ！参加コードは${room.code}だよ！`;
   }
 }
 
+let lobbyUnsubscribe = null;
+
 function enterLobbyView(roomCode, roomData) {
   onlineHubView.style.display = 'none';
   onlineCreateRoomView.style.display = 'none';
@@ -888,6 +909,18 @@ function enterLobbyView(roomCode, roomData) {
   }
 
   updateLobbyUI(roomData);
+
+  // Setup backup sync listener to ensure state stays 100% in sync
+  if (lobbyUnsubscribe) {
+    try { lobbyUnsubscribe(); } catch (e) {}
+    lobbyUnsubscribe = null;
+  }
+  lobbyUnsubscribe = subscribeToRoom(roomCode, (updatedRoom) => {
+    if (updatedRoom && activeRoomCode === roomCode) {
+      currentRoomData = updatedRoom;
+      updateLobbyUI(updatedRoom);
+    }
+  });
 }
 
 // Start Game from Lobby
@@ -1287,7 +1320,65 @@ btnCancelCreateRoom.addEventListener('click', () => {
 });
 
 btnCardShowJoinInput.addEventListener('click', () => {
-  joinRoomForm.style.display = joinRoomForm.style.display === 'none' ? 'block' : 'none';
+  const isHidden = joinRoomForm.style.display === 'none';
+  joinRoomForm.style.display = isHidden ? 'block' : 'none';
+  if (isHidden) {
+    roomCodeInput.focus();
+    loadActiveRooms();
+  }
+});
+
+async function loadActiveRooms() {
+  const listEl = document.getElementById('activeRoomsList');
+  if (!listEl) return;
+  listEl.innerHTML = '<div style="font-size: 0.78rem; color: var(--text-muted); text-align: center; padding: 6px;">更新中...</div>';
+  try {
+    const res = await fetch('/api/jinrou/rooms');
+    if (res.ok) {
+      const data = await res.json();
+      const rooms = data.rooms || [];
+      if (rooms.length === 0) {
+        listEl.innerHTML = '<div style="font-size: 0.78rem; color: var(--text-muted); text-align: center; padding: 6px;">現在募集中の部屋はありません</div>';
+        return;
+      }
+      listEl.innerHTML = '';
+      rooms.forEach(r => {
+        const item = document.createElement('div');
+        item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; padding: 6px 10px; font-size: 0.82rem;';
+        item.innerHTML = `
+          <div>
+            <span style="font-weight: 800; color: var(--crimson);">#${r.code}</span>
+            <span style="color: var(--text-sub); margin-left: 6px;">(${r.hostNickname || 'ホスト'}村)</span>
+            <span style="color: var(--text-muted); font-size: 0.72rem; margin-left: 4px;">${r.playerCount}/${r.maxPlayers}人</span>
+          </div>
+          <button class="btn-primary" style="padding: 4px 10px; font-size: 0.78rem;" data-join-code="${r.code}">参加</button>
+        `;
+        item.querySelector('button').addEventListener('click', () => {
+          roomCodeInput.value = r.code;
+          btnJoinRoomSubmit.click();
+        });
+        listEl.appendChild(item);
+      });
+      return;
+    }
+  } catch (e) {}
+  listEl.innerHTML = '<div style="font-size: 0.78rem; color: var(--text-muted); text-align: center; padding: 6px;">部屋コードを入力してご参加ください</div>';
+}
+
+const btnRefreshActiveRooms = document.getElementById('btnRefreshActiveRooms');
+if (btnRefreshActiveRooms) {
+  btnRefreshActiveRooms.addEventListener('click', loadActiveRooms);
+}
+
+roomCodeInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    btnJoinRoomSubmit.click();
+  }
+});
+
+roomCodeInput.addEventListener('input', () => {
+  joinRoomErrorMsg.classList.remove('visible');
 });
 
 // Create Room Action
@@ -1337,11 +1428,17 @@ btnConfirmCreateRoom.addEventListener('click', async () => {
   }
 });
 
-// Join Room Action
+// Join Room Action (Supports #1234, full-width digits, spaces, and direct code)
 btnJoinRoomSubmit.addEventListener('click', async () => {
-  const code = (roomCodeInput.value || '').trim();
-  if (code.length < 4) {
-    joinRoomErrorMsg.textContent = '4桁の部屋コードを入力してください';
+  const rawVal = (roomCodeInput.value || '').trim();
+  // Strip any leading # or ＃, remove spaces, convert Japanese full-width digits to half-width
+  const code = rawVal
+    .replace(/[＃#\s]/g, '')
+    .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+    .trim();
+
+  if (code.length < 4 || !/^\d{4}$/.test(code)) {
+    joinRoomErrorMsg.textContent = '4桁の半角数字の部屋コードを入力してください（例: 1234）';
     joinRoomErrorMsg.classList.add('visible');
     return;
   }
@@ -1367,6 +1464,7 @@ btnJoinRoomSubmit.addEventListener('click', async () => {
   } catch (err) {
     joinRoomErrorMsg.textContent = err.message || '部屋が見つかりませんでした';
     joinRoomErrorMsg.classList.add('visible');
+    showToast('参加失敗: ' + (err.message || '部屋が見つかりませんでした'));
   } finally {
     btnJoinRoomSubmit.disabled = false;
   }
@@ -1392,6 +1490,10 @@ btnInviteShare.addEventListener('click', () => {
 });
 
 btnLeaveRoom.addEventListener('click', async () => {
+  if (lobbyUnsubscribe) {
+    try { lobbyUnsubscribe(); } catch (e) {}
+    lobbyUnsubscribe = null;
+  }
   if (activeRoomCode) {
     sendWs('LEAVE_ROOM', { code: activeRoomCode, playerId: localPlayerId });
     await leaveFirestoreRoom(activeRoomCode, localPlayerId);
