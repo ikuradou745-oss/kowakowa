@@ -5,7 +5,6 @@ import {
   fetchPlayerProfile, 
   createFirestoreRoom, 
   joinFirestoreRoom, 
-  subscribeToRoom, 
   leaveFirestoreRoom 
 } from './firebase.js';
 
@@ -25,7 +24,7 @@ if (isNaN(vcVolume) || vcVolume < 50 || vcVolume > 500) {
 }
 sound.setVcVolume(vcVolume);
 
-// Coin System (Initial coins is 0, test-increasing feature removed)
+// Coin System (Initial 0, test add coins removed)
 let userCoins = parseInt(localStorage.getItem('jinrou_coins'), 10);
 if (isNaN(userCoins) || userCoins < 0 || userCoins === 500) {
   userCoins = 0;
@@ -41,15 +40,15 @@ try {
   unlockedRoles = [];
 }
 
-// Active Online Room State
+// Active Room & Game State
 let activeRoomCode = null;
-let roomUnsubscribe = null;
 let isHost = false;
 let currentRoomData = null;
 let mySecretRole = null;
 
-// Room Creation Local State
+// Room Creation Settings
 let createRoomPlayerCount = 5;
+let createRoomDiscussionTime = 60; // 10s to 90s, default 60s (1 min)
 let createRoomMode = 'normal'; // 'normal' | 'original'
 let originalRolesConfig = {
   werewolf: 1,
@@ -64,7 +63,7 @@ let originalRolesConfig = {
   archer: 0
 };
 
-// --- Basic Roles Definitions for 「役職確認」 ---
+// --- Roles Definitions ---
 const BASE_ROLES = [
   {
     id: 'werewolf',
@@ -72,8 +71,8 @@ const BASE_ROLES = [
     icon: '🐺',
     camp: 'werewolf',
     campName: '人狼チーム',
-    desc: '人狼チームで村人チームを夜の間に殺害できる。自分が追放されたら負け。',
-    winCondition: '村人チームの人数と同数以上になること（自身が追放されたら敗北）'
+    desc: '人狼チーム。夜の間に村人チームを襲撃して殺害できる。自分が追放されたら負け。',
+    winCondition: '市民チームの生存者を2人以下に追い込む'
   },
   {
     id: 'villager',
@@ -90,7 +89,7 @@ const BASE_ROLES = [
     icon: '🕯️',
     camp: 'villager',
     campName: '村人チーム',
-    desc: '村人チームで追放された人の役職がわかる。',
+    desc: '村人チーム。追放された人の役職が夜のターンにわかる。',
     winCondition: 'すべての人狼を追放する'
   },
   {
@@ -99,7 +98,7 @@ const BASE_ROLES = [
     icon: '🔮',
     camp: 'villager',
     campName: '村人チーム',
-    desc: '夜の時に役職が何かを占える。',
+    desc: '村人チーム。夜の時に誰か1人が人狼か村人陣営かを占える。',
     winCondition: 'すべての人狼を追放する'
   },
   {
@@ -108,7 +107,7 @@ const BASE_ROLES = [
     icon: '🛡️',
     camp: 'villager',
     campName: '村人チーム',
-    desc: '夜の時に味方を守れる。',
+    desc: '村人チーム。人狼が動く前に誰か1人を守ることができる。',
     winCondition: 'すべての人狼を追放する'
   },
   {
@@ -117,12 +116,11 @@ const BASE_ROLES = [
     icon: '🎭',
     camp: 'werewolf',
     campName: '人狼チーム',
-    desc: '人狼チーム。村人陣営としてカウントされますが、人狼チームの勝利を目指します。',
+    desc: '人狼チーム。人狼が誰かは分かりませんが、人狼チームの勝利を目指して村を混乱させます。',
     winCondition: '人狼チームが勝利する'
   }
 ];
 
-// --- Shop Roles Definitions ---
 const SHOP_ROLES = [
   {
     id: 'mayor',
@@ -131,7 +129,7 @@ const SHOP_ROLES = [
     cost: 100,
     camp: 'villager',
     campName: '村人チーム',
-    desc: '死亡時に裏切り者が誰かがわかる。村長が死亡した時、村に潜む裏切り者の正体が暴かれます。',
+    desc: '死亡時に裏切り者が誰かが暴かれます。村の指導者。',
     winCondition: 'すべての人狼を追放する'
   },
   {
@@ -141,7 +139,7 @@ const SHOP_ROLES = [
     cost: 300,
     camp: 'villager',
     campName: '村人チーム',
-    desc: '2日目以降の夜のターンに一度だけ味方を一人復活できる。ピンチの村人を蘇生させて形勢逆転を狙えます。',
+    desc: '2日目以降の夜のターンに一度だけ味方を一人復活できる。',
     winCondition: 'すべての人狼を追放する'
   },
   {
@@ -151,7 +149,7 @@ const SHOP_ROLES = [
     cost: 100,
     camp: 'villager',
     campName: '村人チーム',
-    desc: '自分が死亡した時に誰か一人を道連れにして死亡させることができる。最後の反撃で村を守る強力な役職。',
+    desc: '自分が死亡した時に誰か一人を道連れにして死亡させることができる。',
     winCondition: 'すべての人狼を追放する'
   },
   {
@@ -161,7 +159,7 @@ const SHOP_ROLES = [
     cost: 200,
     camp: 'villager',
     campName: '村人チーム',
-    desc: '夜のターンに一度だけ誰かを狙撃（殺害）できる。人狼を直接討ち取ることができる強力な攻撃能力者。',
+    desc: '夜のターンに一度だけ誰かを狙撃（殺害）できる。',
     winCondition: 'すべての人狼を追放する'
   }
 ];
@@ -170,7 +168,32 @@ const ALL_ROLES_MAP = {};
 BASE_ROLES.forEach(r => { ALL_ROLES_MAP[r.id] = r; });
 SHOP_ROLES.forEach(r => { ALL_ROLES_MAP[r.id] = r; });
 
-// --- DOM Elements ---
+const WEREWOLF_TEAM_ROLE_IDS = ['werewolf', 'traitor'];
+
+// Normal preset generation
+function getNormalRolesConfig(count) {
+  const c = Math.max(3, Math.min(12, count));
+  if (c === 3) return { werewolf: 1, seer: 1, villager: 1 };
+  if (c === 4) return { werewolf: 1, seer: 1, hunter_guard: 1, villager: 1 };
+  if (c === 5) return { werewolf: 1, traitor: 1, seer: 1, hunter_guard: 1, villager: 1 };
+  if (c === 6) return { werewolf: 2, seer: 1, hunter_guard: 1, medium: 1, villager: 1 };
+  if (c === 7) return { werewolf: 2, traitor: 1, seer: 1, hunter_guard: 1, medium: 1, villager: 1 };
+  if (c === 8) return { werewolf: 2, traitor: 1, seer: 1, hunter_guard: 1, medium: 1, villager: 2 };
+  if (c === 9) return { werewolf: 2, traitor: 1, seer: 1, hunter_guard: 1, medium: 1, mayor: 1, villager: 2 };
+  if (c === 10) return { werewolf: 3, traitor: 1, seer: 1, hunter_guard: 1, medium: 1, hunter_avenger: 1, villager: 2 };
+  if (c === 11) return { werewolf: 3, traitor: 1, seer: 1, hunter_guard: 1, medium: 1, medic: 1, villager: 3 };
+  return { werewolf: 3, traitor: 1, seer: 1, hunter_guard: 1, medium: 1, archer: 1, medic: 1, villager: 3 };
+}
+
+function expandRolesList(config) {
+  const list = [];
+  for (const [rId, cnt] of Object.entries(config)) {
+    for (let i = 0; i < cnt; i++) list.push(rId);
+  }
+  return list;
+}
+
+// --- DOM References ---
 const topNicknameChip = document.getElementById('topNicknameChip');
 const topNicknameText = document.getElementById('topNicknameText');
 const topCoinsChip = document.getElementById('topCoinsChip');
@@ -196,7 +219,6 @@ const vcVolumeDisplay = document.getElementById('vcVolumeDisplay');
 const btnTestVolume = document.getElementById('btnTestVolume');
 const presetPills = document.querySelectorAll('.preset-pill[data-preset]');
 
-// VC & Mic Settings buttons
 const btnSettingsVcOn = document.getElementById('btnSettingsVcOn');
 const btnSettingsVcOff = document.getElementById('btnSettingsVcOff');
 const btnSettingsMicOn = document.getElementById('btnSettingsMicOn');
@@ -207,7 +229,7 @@ const btnOnlinePlay = document.getElementById('btnOnlinePlay');
 const btnRoleGuide = document.getElementById('btnRoleGuide');
 const btnOpenShop = document.getElementById('btnOpenShop');
 
-// Role Guide Modal
+// Role Guide & Shop
 const roleGuideModal = document.getElementById('roleGuideModal');
 const btnCloseRoleGuide = document.getElementById('btnCloseRoleGuide');
 const btnFinishRoleGuide = document.getElementById('btnFinishRoleGuide');
@@ -217,14 +239,13 @@ const tabRoleVillager = document.getElementById('tabRoleVillager');
 const tabRoleWerewolf = document.getElementById('tabRoleWerewolf');
 const tabRoleShop = document.getElementById('tabRoleShop');
 
-// Shop Modal
 const shopModal = document.getElementById('shopModal');
 const btnCloseShop = document.getElementById('btnCloseShop');
 const btnFinishShop = document.getElementById('btnFinishShop');
 const shopCoinsDisplay = document.getElementById('shopCoinsDisplay');
 const shopItemsList = document.getElementById('shopItemsList');
 
-// Online Play Modal
+// Online Play Views
 const onlinePlayModal = document.getElementById('onlinePlayModal');
 const btnCloseOnlinePlay = document.getElementById('btnCloseOnlinePlay');
 const onlineHubView = document.getElementById('onlineHubView');
@@ -237,9 +258,20 @@ const roomCodeInput = document.getElementById('roomCodeInput');
 const btnJoinRoomSubmit = document.getElementById('btnJoinRoomSubmit');
 const joinRoomErrorMsg = document.getElementById('joinRoomErrorMsg');
 
-// Create Room View
+// Create Room Settings
 const roomPlayerCountSlider = document.getElementById('roomPlayerCountSlider');
 const playerCountDisplay = document.getElementById('playerCountDisplay');
+const roomDiscussionTimeSlider = document.getElementById('roomDiscussionTimeSlider');
+const discussionTimeDisplay = document.getElementById('discussionTimeDisplay');
+const btnModeNormal = document.getElementById('btnModeNormal');
+const btnModeOriginal = document.getElementById('btnModeOriginal');
+const normalModeContainer = document.getElementById('normalModeContainer');
+const normalRolesPreviewList = document.getElementById('normalRolesPreviewList');
+const originalModeContainer = document.getElementById('originalModeContainer');
+const originalRolesSteppersList = document.getElementById('originalRolesSteppersList');
+const originalValidationBox = document.getElementById('originalValidationBox');
+const originalTotalCountNotice = document.getElementById('originalTotalCountNotice');
+const originalRatioNotice = document.getElementById('originalRatioNotice');
 const btnConfirmCreateRoom = document.getElementById('btnConfirmCreateRoom');
 const btnCancelCreateRoom = document.getElementById('btnCancelCreateRoom');
 
@@ -256,7 +288,6 @@ const lobbyInvitePreviewText = document.getElementById('lobbyInvitePreviewText')
 const lobbyMinPlayerWarning = document.getElementById('lobbyMinPlayerWarning');
 const lobbyMinPlayerNoticeText = document.getElementById('lobbyMinPlayerNoticeText');
 
-// Lobby In-Room Voice Bar
 const btnLobbyVcToggle = document.getElementById('btnLobbyVcToggle');
 const lobbyVcIcon = document.getElementById('lobbyVcIcon');
 const lobbyVcLabel = document.getElementById('lobbyVcLabel');
@@ -265,7 +296,7 @@ const lobbyMicIcon = document.getElementById('lobbyMicIcon');
 const lobbyMicLabel = document.getElementById('lobbyMicLabel');
 const lobbySpeakingRing = document.getElementById('lobbySpeakingRing');
 
-// Top-Left Chat Box
+// Top-Left Chat
 const topLeftChatContainer = document.getElementById('topLeftChatContainer');
 const chatModeBadge = document.getElementById('chatModeBadge');
 const chatModeText = document.getElementById('chatModeText');
@@ -276,12 +307,24 @@ const chatInput = document.getElementById('chatInput');
 const chatCharCounter = document.getElementById('chatCharCounter');
 const btnSendChat = document.getElementById('btnSendChat');
 
+// Role Announcement Modal
+const roleAnnouncementModal = document.getElementById('roleAnnouncementModal');
+const revealRoleIcon = document.getElementById('revealRoleIcon');
+const revealRoleName = document.getElementById('revealRoleName');
+const revealRoleBadge = document.getElementById('revealRoleBadge');
+const revealRoleDesc = document.getElementById('revealRoleDesc');
+const revealRoleWinCondition = document.getElementById('revealRoleWinCondition');
+const btnConfirmMyRole = document.getElementById('btnConfirmMyRole');
+
 // Game View
 const gameView = document.getElementById('gameView');
 const gameDayCountText = document.getElementById('gameDayCountText');
 const gamePhaseBadge = document.getElementById('gamePhaseBadge');
 const gamePhaseIcon = document.getElementById('gamePhaseIcon');
 const gamePhaseText = document.getElementById('gamePhaseText');
+const gameCutsceneBanner = document.getElementById('gameCutsceneBanner');
+const cutsceneTitle = document.getElementById('cutsceneTitle');
+const cutsceneBody = document.getElementById('cutsceneBody');
 const myRoleCampBadge = document.getElementById('myRoleCampBadge');
 const myRoleIcon = document.getElementById('myRoleIcon');
 const myRoleName = document.getElementById('myRoleName');
@@ -289,34 +332,25 @@ const myRoleDesc = document.getElementById('myRoleDesc');
 const gameActionPrompt = document.getElementById('gameActionPrompt');
 const gamePlayersGrid = document.getElementById('gamePlayersGrid');
 const btnHostNextPhase = document.getElementById('btnHostNextPhase');
+const btnReturnToLobby = document.getElementById('btnReturnToLobby');
 const btnGameVcToggle = document.getElementById('btnGameVcToggle');
 const btnGameMicToggle = document.getElementById('btnGameMicToggle');
 const gameVcLabel = document.getElementById('gameVcLabel');
 const gameMicLabel = document.getElementById('gameMicLabel');
 
-// Global Toast
 const globalToast = document.getElementById('globalToast');
 
-// --- Voice Manager (WebRTC Voice Chat) ---
+// --- Voice Manager (WebRTC) ---
 const voiceManager = new VoiceManager({
-  onSpeakingChange: (isSpeaking) => {
-    updateSpeakingIndicators(localPlayerId, isSpeaking);
-  },
-  onPeerVoiceState: (peerId, voiceState) => {
-    updateSpeakingIndicators(peerId, voiceState.isSpeaking);
-  },
-  onRemoteTrack: (peerId, stream) => {
-    console.log(`[WebRTC] Attached remote audio track for peer ${peerId}`);
-  },
-  onLog: (msg) => {
-    showToast(msg);
-  }
+  onSpeakingChange: (isSpeaking) => updateSpeakingIndicators(localPlayerId, isSpeaking),
+  onPeerVoiceState: (peerId, voiceState) => updateSpeakingIndicators(peerId, voiceState.isSpeaking),
+  onRemoteTrack: (peerId, stream) => {},
+  onLog: (msg) => showToast(msg)
 });
 voiceManager.setVolume(vcVolume);
 
-// --- WebSocket Real-Time Connection ---
+// --- WebSocket Connection ---
 let socket = null;
-let isSocketConnected = false;
 
 function initWebSocket() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -325,9 +359,7 @@ function initWebSocket() {
     socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
-      isSocketConnected = true;
-      console.log('[WS] Connected to Werewolf server');
-      // If we already have an active room, re-join on reconnect
+      console.log('[WS] Connected');
       if (activeRoomCode) {
         socket.send(JSON.stringify({
           type: 'JOIN_ROOM',
@@ -345,30 +377,17 @@ function initWebSocket() {
       try {
         const msg = JSON.parse(event.data);
         handleSocketMessage(msg);
-      } catch (err) {
-        console.error('[WS] Parse error', err);
-      }
+      } catch (e) {}
     };
 
-    socket.onclose = () => {
-      isSocketConnected = false;
-      setTimeout(initWebSocket, 2000);
-    };
+    socket.onclose = () => setTimeout(initWebSocket, 2000);
 
-    socket.onerror = (e) => {
-      console.warn('[WS] Socket notice:', e);
-    };
-
-    // Connect voice signaling through WebSocket
     voiceManager.setSignalSender((signalMsg) => {
       if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify(signalMsg));
       }
     }, localPlayerId, activeRoomCode);
-
-  } catch (err) {
-    console.warn('[WS] Could not start WebSocket', err);
-  }
+  } catch (err) {}
 }
 initWebSocket();
 
@@ -378,7 +397,6 @@ function sendWs(type, payload) {
   }
 }
 
-// --- WebSocket Message Handler ---
 function handleSocketMessage(msg) {
   const { type, payload } = msg;
 
@@ -390,46 +408,49 @@ function handleSocketMessage(msg) {
       updateLobbyUI(payload);
       break;
     }
-
     case 'PEER_JOINED': {
-      // Another peer joined our room: initiate WebRTC audio offer
       if (payload.peerId !== localPlayerId) {
         voiceManager.handlePeerJoined(payload.peerId, true);
-        appendChatMessage('システム', `「${payload.nickname || 'プレイヤー'}」が部屋に入室しました`, 'system');
+        appendChatMessage('システム', `「${payload.nickname || 'プレイヤー'}」が入室しました`, 'system');
       }
       break;
     }
-
     case 'PEER_LEFT': {
       if (payload.peerId !== localPlayerId) {
         voiceManager.handlePeerLeft(payload.peerId);
       }
       break;
     }
-
     case 'WEBRTC_SIGNAL': {
       voiceManager.handleSignal(payload.senderId, payload.signal);
       break;
     }
-
     case 'VOICE_STATE_UPDATE': {
       updateSpeakingIndicators(payload.playerId, payload.isSpeaking);
-      updatePeerVoiceIcon(payload.playerId, payload.isVcOn, payload.isMuted);
       break;
     }
-
     case 'CHAT_MESSAGE': {
       appendChatMessage(payload.senderName, payload.text, payload.senderId === localPlayerId ? 'me' : 'other');
       break;
     }
-
     case 'GAME_STARTED': {
       currentRoomData = payload;
       mySecretRole = payload.myRole || 'villager';
-      startGameScreen(payload);
+      showRoleAnnouncement(mySecretRole, payload);
       break;
     }
-
+    case 'TIMER_TICK': {
+      if (currentRoomData && currentRoomData.game) {
+        currentRoomData.game.timerSec = payload.timerSec;
+        updateTimerBadge(payload.timerSec);
+      }
+      break;
+    }
+    case 'PHASE_CHANGED': {
+      currentRoomData = payload;
+      updateGamePhaseUI(payload);
+      break;
+    }
     case 'SEER_RESULT': {
       sound.playSuccess();
       const verdict = payload.isWerewolf ? '【人狼】🐺' : '【村人陣営】🧑‍🌾';
@@ -437,15 +458,20 @@ function handleSocketMessage(msg) {
       appendChatMessage('占い結果', `${payload.targetNickname}さんは${verdict}でした`, 'system');
       break;
     }
-
-    case 'PHASE_CHANGED': {
-      currentRoomData = payload;
-      updateGamePhaseUI(payload);
+    case 'MEDIUM_RESULT': {
+      sound.playSuccess();
+      const verdict = payload.isWerewolf ? '【人狼】🐺' : '【村人陣営】🧑‍🌾';
+      showToast(`🕯️ 霊媒結果: 追放された ${payload.exiledNickname} さんは ${verdict} でした！`);
+      appendChatMessage('霊媒結果', `${payload.exiledNickname}さんは${verdict}でした`, 'system');
       break;
     }
-
+    case 'ACTION_CONFIRMED': {
+      sound.playClick();
+      showToast('行動を選択しました');
+      break;
+    }
     case 'ERROR': {
-      showToast(payload.message || 'エラーが発生しました');
+      showToast(payload.message || 'エラー');
       break;
     }
   }
@@ -457,18 +483,11 @@ function showToast(msg) {
   globalToast.textContent = msg;
   globalToast.classList.add('show');
   clearTimeout(globalToast._timer);
-  globalToast._timer = setTimeout(() => {
-    globalToast.classList.remove('show');
-  }, 2800);
+  globalToast._timer = setTimeout(() => globalToast.classList.remove('show'), 2800);
 }
 
-function openModal(modal) {
-  if (modal) modal.classList.add('active');
-}
-
-function closeModal(modal) {
-  if (modal) modal.classList.remove('active');
-}
+function openModal(modal) { if (modal) modal.classList.add('active'); }
+function closeModal(modal) { if (modal) modal.classList.remove('active'); }
 
 function validateNickname(name) {
   const trimmed = (name || '').trim();
@@ -495,10 +514,8 @@ function updateVcVolumeUI(vol) {
   vcVolumeDisplay.textContent = vcVolume;
   sound.setVcVolume(vcVolume);
   voiceManager.setVolume(vcVolume);
-
-  presetPills.forEach((pill) => {
-    const pVal = parseInt(pill.getAttribute('data-preset'), 10);
-    pill.classList.toggle('active', pVal === vcVolume);
+  presetPills.forEach(pill => {
+    pill.classList.toggle('active', parseInt(pill.getAttribute('data-preset'), 10) === vcVolume);
   });
 }
 
@@ -507,11 +524,10 @@ function scheduleProfileSync() {
   savePlayerProfile(localPlayerId, localNickname, vcVolume, userCoins, unlockedRoles);
 }
 
-// --- Top-Left Chat Management (Max 20 chars, format: [ユーザー名]: [チャットの内容]) ---
+// --- Top-Left Chat ---
 function appendChatMessage(senderName, text, type = 'other') {
   const item = document.createElement('div');
   item.className = 'chat-message-item';
-
   const isMe = type === 'me';
   const isSys = type === 'system';
 
@@ -532,11 +548,8 @@ function appendChatMessage(senderName, text, type = 'other') {
 function sendCurrentChat() {
   let val = (chatInput.value || '').trim();
   if (!val) return;
-  if (val.length > 20) {
-    val = val.slice(0, 20); // strictly max 20 chars
-  }
+  if (val.length > 20) val = val.slice(0, 20); // strict 20 chars
 
-  // Send through WebSocket to room
   if (activeRoomCode) {
     sendWs('CHAT_MESSAGE', {
       roomCode: activeRoomCode,
@@ -562,14 +575,9 @@ chatInput.addEventListener('input', (e) => {
 });
 
 chatInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    sendCurrentChat();
-  }
+  if (e.key === 'Enter') sendCurrentChat();
 });
-
-btnSendChat.addEventListener('click', () => {
-  sendCurrentChat();
-});
+btnSendChat.addEventListener('click', sendCurrentChat);
 
 btnChatToggle.addEventListener('click', () => {
   if (chatExpandableArea.style.display === 'none') {
@@ -584,8 +592,6 @@ btnChatToggle.addEventListener('click', () => {
 // --- VC & Mic Control Functions ---
 function setVcState(enabled) {
   voiceManager.setVcEnabled(enabled);
-
-  // Update Top-Left Chat Mode Badge
   if (enabled) {
     chatModeBadge.className = 'chat-mode-badge vc-on';
     chatModeBadge.innerHTML = '<span>🎙️</span><span>VC: ON (通話可能)</span>';
@@ -594,7 +600,6 @@ function setVcState(enabled) {
     btnLobbyVcToggle.classList.add('active');
     btnLobbyVcToggle.classList.remove('muted');
     if (gameVcLabel) gameVcLabel.textContent = '🔊 VC: ON';
-    showToast('🔊 ボイスチャット (VC) をONにしました');
   } else {
     chatModeBadge.className = 'chat-mode-badge vc-off';
     chatModeBadge.innerHTML = '<span>💬</span><span>チャットモード (VC: OFF)</span>';
@@ -603,105 +608,206 @@ function setVcState(enabled) {
     btnLobbyVcToggle.classList.remove('active');
     btnLobbyVcToggle.classList.add('muted');
     if (gameVcLabel) gameVcLabel.textContent = '🔇 VC: OFF';
-    showToast('🔇 VCをOFFにしました（チャットモード中）');
-    // Expand chat and focus input
     chatExpandableArea.style.display = 'block';
     btnChatToggle.textContent = '▼';
     chatInput.focus();
   }
-
-  // Update settings modal buttons
   btnSettingsVcOn.style.background = enabled ? 'var(--emerald-light)' : '#f1f5f9';
   btnSettingsVcOff.style.background = !enabled ? 'var(--sky-light)' : '#f1f5f9';
 }
 
 function setMicState(muted) {
   voiceManager.setMicMuted(muted);
-
   if (muted) {
     lobbyMicIcon.textContent = '🔇';
     lobbyMicLabel.textContent = 'マイク: OFF';
     btnLobbyMicToggle.classList.remove('active');
     btnLobbyMicToggle.classList.add('muted');
     if (gameMicLabel) gameMicLabel.textContent = '🔇 マイクOFF';
-    showToast('🔇 マイクをミュートしました');
   } else {
     lobbyMicIcon.textContent = '🎙️';
     lobbyMicLabel.textContent = 'マイク: ON';
     btnLobbyMicToggle.classList.add('active');
     btnLobbyMicToggle.classList.remove('muted');
     if (gameMicLabel) gameMicLabel.textContent = '🎙️ マイクON';
-    showToast('🎙️ マイクをONにしました');
   }
-
   btnSettingsMicOn.style.background = !muted ? 'var(--emerald-light)' : '#f1f5f9';
   btnSettingsMicOff.style.background = muted ? 'var(--crimson-light)' : '#f1f5f9';
 }
 
-// In-Lobby & In-Game Voice Buttons
-btnLobbyVcToggle.addEventListener('click', () => {
-  setVcState(!voiceManager.isVcEnabled);
-});
-
-btnLobbyMicToggle.addEventListener('click', () => {
-  setMicState(!voiceManager.isMicMuted);
-});
-
-if (btnGameVcToggle) {
-  btnGameVcToggle.addEventListener('click', () => {
-    setVcState(!voiceManager.isVcEnabled);
-  });
-}
-if (btnGameMicToggle) {
-  btnGameMicToggle.addEventListener('click', () => {
-    setMicState(!voiceManager.isMicMuted);
-  });
-}
+btnLobbyVcToggle.addEventListener('click', () => setVcState(!voiceManager.isVcEnabled));
+btnLobbyMicToggle.addEventListener('click', () => setMicState(!voiceManager.isMicMuted));
+if (btnGameVcToggle) btnGameVcToggle.addEventListener('click', () => setVcState(!voiceManager.isVcEnabled));
+if (btnGameMicToggle) btnGameMicToggle.addEventListener('click', () => setMicState(!voiceManager.isMicMuted));
 
 btnSettingsVcOn.addEventListener('click', () => setVcState(true));
 btnSettingsVcOff.addEventListener('click', () => setVcState(false));
 btnSettingsMicOn.addEventListener('click', () => setMicState(false));
 btnSettingsMicOff.addEventListener('click', () => setMicState(true));
 
-// Speaking Indicators Update
 function updateSpeakingIndicators(playerId, isSpeaking) {
-  if (playerId === localPlayerId) {
-    if (lobbySpeakingRing) {
-      lobbySpeakingRing.classList.toggle('speaking', isSpeaking);
-    }
+  if (playerId === localPlayerId && lobbySpeakingRing) {
+    lobbySpeakingRing.classList.toggle('speaking', isSpeaking);
   }
-
-  // Update in Lobby Roster
   const rosterItem = document.getElementById(`roster_${playerId}`);
   if (rosterItem) {
     const ring = rosterItem.querySelector('.speaking-indicator-ring');
     if (ring) ring.classList.toggle('speaking', isSpeaking);
   }
-
-  // Update in Game Player Card
   const gameCard = document.getElementById(`game_player_${playerId}`);
   if (gameCard) {
     gameCard.classList.toggle('speaking', isSpeaking);
   }
 }
 
-function updatePeerVoiceIcon(playerId, isVcOn, isMuted) {
-  const rosterItem = document.getElementById(`roster_${playerId}`);
-  if (rosterItem) {
-    const vcIcon = rosterItem.querySelector('.peer-vc-icon');
-    if (vcIcon) {
-      if (!isVcOn) {
-        vcIcon.textContent = '🔇(VC切)';
-      } else if (isMuted) {
-        vcIcon.textContent = '🔇(消音)';
-      } else {
-        vcIcon.textContent = '🎙️';
+// --- Create Room Settings (Fix: Mode switch, Role Preview, Discussion Time 10~90s) ---
+function updateCreateRoomUI() {
+  playerCountDisplay.textContent = `${createRoomPlayerCount}人`;
+  discussionTimeDisplay.textContent = `${createRoomDiscussionTime}秒 (${Math.floor(createRoomDiscussionTime / 60)}分${createRoomDiscussionTime % 60 ? (createRoomDiscussionTime % 60) + '秒' : ''})`;
+
+  if (createRoomMode === 'normal') {
+    normalModeContainer.style.display = 'block';
+    originalModeContainer.style.display = 'none';
+    btnModeNormal.classList.add('active');
+    btnModeOriginal.classList.remove('active');
+
+    // Populate normal roles preview
+    const preset = getNormalRolesConfig(createRoomPlayerCount);
+    normalRolesPreviewList.innerHTML = '';
+    for (const [rId, cnt] of Object.entries(preset)) {
+      if (cnt > 0 && ALL_ROLES_MAP[rId]) {
+        const r = ALL_ROLES_MAP[rId];
+        const chip = document.createElement('div');
+        chip.className = 'role-preview-chip';
+        chip.innerHTML = `<span>${r.icon}</span> <span>${r.name}</span> <strong style="color: var(--crimson);">× ${cnt}</strong>`;
+        normalRolesPreviewList.appendChild(chip);
       }
     }
+    btnConfirmCreateRoom.disabled = false;
+  } else {
+    normalModeContainer.style.display = 'none';
+    originalModeContainer.style.display = 'block';
+    btnModeNormal.classList.remove('active');
+    btnModeOriginal.classList.add('active');
+
+    renderOriginalSteppers();
+    validateOriginalRoles();
   }
 }
 
-// --- Lobby Management & Minimum 3 Players Enforcement ---
+function renderOriginalSteppers() {
+  originalRolesSteppersList.innerHTML = '';
+  const availableRoles = [...BASE_ROLES, ...SHOP_ROLES.filter(r => unlockedRoles.includes(r.id))];
+
+  availableRoles.forEach(r => {
+    const count = originalRolesConfig[r.id] || 0;
+    const isWolf = WEREWOLF_TEAM_ROLE_IDS.includes(r.id);
+
+    const item = document.createElement('div');
+    item.className = 'role-stepper-item';
+    item.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 1.2rem;">${r.icon}</span>
+        <span style="font-weight: 800; font-size: 0.9rem;">${r.name}</span>
+        <span class="role-badge ${isWolf ? 'werewolf' : 'villager'}" style="font-size: 0.65rem;">
+          ${isWolf ? '人狼' : '市民'}
+        </span>
+      </div>
+      <div class="role-stepper-ctrl">
+        <button class="btn-stepper btn-minus" data-id="${r.id}">−</button>
+        <span class="stepper-count" id="count_${r.id}">${count}</span>
+        <button class="btn-stepper btn-plus" data-id="${r.id}">＋</button>
+      </div>
+    `;
+
+    item.querySelector('.btn-minus').addEventListener('click', () => {
+      sound.playClick();
+      if ((originalRolesConfig[r.id] || 0) > 0) {
+        originalRolesConfig[r.id]--;
+        document.getElementById(`count_${r.id}`).textContent = originalRolesConfig[r.id];
+        validateOriginalRoles();
+      }
+    });
+
+    item.querySelector('.btn-plus').addEventListener('click', () => {
+      sound.playClick();
+      originalRolesConfig[r.id] = (originalRolesConfig[r.id] || 0) + 1;
+      document.getElementById(`count_${r.id}`).textContent = originalRolesConfig[r.id];
+      validateOriginalRoles();
+    });
+
+    originalRolesSteppersList.appendChild(item);
+  });
+}
+
+function validateOriginalRoles() {
+  let total = 0;
+  let wolfTeam = 0;
+  for (const [rId, c] of Object.entries(originalRolesConfig)) {
+    total += c;
+    if (WEREWOLF_TEAM_ROLE_IDS.includes(rId)) wolfTeam += c;
+  }
+
+  const citizenTeam = total - wolfTeam;
+  const ratio = total > 0 ? wolfTeam / total : 0;
+  const target = createRoomPlayerCount;
+
+  const isCountValid = total === target;
+  const isRatioValid = wolfTeam >= 1 && ratio >= 0.12 && ratio <= 0.4;
+  const isValid = isCountValid && isRatioValid;
+
+  originalTotalCountNotice.textContent = `合計役職数: ${total} / ${target}人 ${isCountValid ? '✅' : '⚠️ 定員に合わせてください'}`;
+
+  const wolfPercent = Math.round(ratio * 100);
+  const citizenPercent = 100 - wolfPercent;
+
+  if (!isRatioValid) {
+    originalRatioNotice.innerHTML = `⚠️ 陣営比率: 人狼陣営 ${wolfTeam}人 : 市民陣営 ${citizenTeam}人 (${wolfPercent}% : ${citizenPercent}%)<br><span style="font-size: 0.72rem; opacity: 0.9;">※ 人狼チームと市民チームの比率が約 <strong>2 : 8</strong> になるようにしてください</span>`;
+    originalValidationBox.className = 'ratio-indicator-box invalid';
+    btnConfirmCreateRoom.disabled = true;
+  } else {
+    originalRatioNotice.innerHTML = `✅ 陣営比率: 人狼陣営 ${wolfTeam}人 : 市民陣営 ${citizenTeam}人 (${wolfPercent}% : ${citizenPercent}%) 良好！`;
+    originalValidationBox.className = 'ratio-indicator-box valid';
+    btnConfirmCreateRoom.disabled = !isCountValid;
+  }
+}
+
+roomPlayerCountSlider.addEventListener('input', (e) => {
+  createRoomPlayerCount = parseInt(e.target.value, 10);
+  updateCreateRoomUI();
+});
+
+roomDiscussionTimeSlider.addEventListener('input', (e) => {
+  createRoomDiscussionTime = parseInt(e.target.value, 10);
+  updateCreateRoomUI();
+});
+
+btnModeNormal.addEventListener('click', () => {
+  sound.playClick();
+  createRoomMode = 'normal';
+  updateCreateRoomUI();
+});
+
+btnModeOriginal.addEventListener('click', () => {
+  sound.playClick();
+  createRoomMode = 'original';
+  const normalPreset = getNormalRolesConfig(createRoomPlayerCount);
+  originalRolesConfig = {
+    werewolf: normalPreset.werewolf || 1,
+    traitor: normalPreset.traitor || 0,
+    villager: normalPreset.villager || 0,
+    seer: normalPreset.seer || 0,
+    hunter_guard: normalPreset.hunter_guard || 0,
+    medium: normalPreset.medium || 0,
+    mayor: 0,
+    medic: 0,
+    hunter_avenger: 0,
+    archer: 0
+  };
+  updateCreateRoomUI();
+});
+
+// --- Lobby View ---
 function updateLobbyUI(room) {
   if (!room) return;
   activeRoomCode = room.code;
@@ -714,41 +820,34 @@ function updateLobbyUI(room) {
   lobbyPlayerCount.textContent = playerCount;
   lobbyPlayerMax.textContent = maxPlayers;
 
-  // Invite text preview
   const hostNick = room.hostNickname || localNickname;
   lobbyInvitePreviewText.textContent = `https://ikuradou745-oss.github.io/zinnrou/
 ${hostNick}が呼んでるよ！参加コードは${room.code}だよ！`;
 
-  // Render Roster
   lobbyPlayerRoster.innerHTML = '';
   players.forEach((p) => {
     const isMe = p.id === localPlayerId;
-    const isHostPlayer = p.isHost;
-
     const row = document.createElement('div');
     row.className = 'lobby-player-item';
     row.id = `roster_${p.id}`;
-
     row.innerHTML = `
       <div class="lobby-player-info">
         <span class="speaking-indicator-ring ${p.isSpeaking ? 'speaking' : ''}"></span>
         <span>👤 ${p.nickname}</span>
-        ${isHostPlayer ? '<span style="font-size: 0.7rem; background: var(--crimson-light); color: var(--crimson); font-weight: 800; padding: 2px 6px; border-radius: 4px;">ホスト</span>' : ''}
+        ${p.isHost ? '<span style="font-size: 0.7rem; background: var(--crimson-light); color: var(--crimson); font-weight: 800; padding: 2px 6px; border-radius: 4px;">ホスト</span>' : ''}
         ${isMe ? '<span style="font-size: 0.7rem; color: var(--sky); font-weight: 800;">(あなた)</span>' : ''}
       </div>
       <div class="lobby-player-voice-status">
-        <span class="peer-vc-icon">${!p.isVcOn ? '🔇(VC切)' : p.isMuted ? '🔇(消音)' : '🎙️'}</span>
+        <span>${!p.isVcOn ? '🔇(VC切)' : p.isMuted ? '🔇(消音)' : '🎙️'}</span>
       </div>
     `;
     lobbyPlayerRoster.appendChild(row);
   });
 
-  // --- STRICT REQUIREMENT: Minimum 3 players required to start game ---
+  // Strict Rule: Minimum 3 players required to start!
   const isMeHost = (room.hostId === localPlayerId);
-
   if (isMeHost) {
     btnLobbyStartGame.style.display = 'block';
-
     if (playerCount < 3) {
       btnLobbyStartGame.disabled = true;
       btnLobbyStartGame.textContent = `最低3人必要 (現在: ${playerCount}/3人)`;
@@ -775,18 +874,15 @@ function enterLobbyView(roomCode, roomData) {
   onlineCreateRoomView.style.display = 'none';
   onlineLobbyView.style.display = 'block';
 
-  // Show Top-Left Chat Box
   topLeftChatContainer.style.display = 'block';
   chatExpandableArea.style.display = 'block';
 
-  // Set Voice manager room code and sender
   voiceManager.setSignalSender((msg) => {
     if (socket && socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify(msg));
     }
   }, localPlayerId, roomCode);
 
-  // Initialize microphone if VC is enabled
   if (voiceManager.isVcEnabled) {
     voiceManager.initLocalAudio();
   }
@@ -794,38 +890,66 @@ function enterLobbyView(roomCode, roomData) {
   updateLobbyUI(roomData);
 }
 
-// --- Start Game Action (Minimum 3 players) ---
+// Start Game from Lobby
 btnLobbyStartGame.addEventListener('click', () => {
   const currentCount = currentRoomData ? Object.keys(currentRoomData.players || {}).length : 1;
   if (currentCount < 3) {
     sound.playClick();
-    showToast(`⚠️ ゲームを開始するには最低3人のプレイヤーが必要です（現在: ${currentCount}/3人）`);
+    showToast(`⚠️ 最低3人いないとゲームを開始できません（現在: ${currentCount}/3人）`);
     return;
   }
-
   sound.playWolfHowl();
-  showToast('🐺 ゲームを開始しています（配役を決定中...）');
+  showToast('🐺 役職を配り、ゲームを開始します...');
   sendWs('START_GAME', { roomCode: activeRoomCode, playerId: localPlayerId });
 });
 
-// --- In-Game Screen Management ---
-function startGameScreen(room) {
+// --- Role Announcement Phase (ユーザー要望: 最初は自分の役職が言い渡され、その後に試合スタート) ---
+function showRoleAnnouncement(roleId, room) {
   closeModal(onlinePlayModal);
-  gameView.style.display = 'flex';
+  const r = ALL_ROLES_MAP[roleId] || BASE_ROLES[1];
 
-  // Ensure Top-Left Chat is active and visible
-  topLeftChatContainer.style.display = 'block';
+  revealRoleIcon.textContent = r.icon;
+  revealRoleName.textContent = r.name;
+  revealRoleDesc.textContent = r.desc;
+  revealRoleWinCondition.textContent = r.winCondition;
+  revealRoleBadge.textContent = r.campName;
+  revealRoleBadge.className = 'role-badge ' + (r.camp === 'werewolf' ? 'werewolf' : 'villager');
 
-  // Reveal Secret Role
-  const roleObj = ALL_ROLES_MAP[mySecretRole] || BASE_ROLES[1];
-  myRoleName.textContent = roleObj.name;
-  myRoleIcon.textContent = roleObj.icon;
-  myRoleDesc.textContent = roleObj.desc;
-  myRoleCampBadge.textContent = roleObj.campName;
-  myRoleCampBadge.className = 'role-badge ' + (roleObj.camp === 'werewolf' ? 'werewolf' : 'villager');
+  openModal(roleAnnouncementModal);
+  sound.playWolfHowl();
 
-  updateGamePhaseUI(room);
-  appendChatMessage('進行役', `ゲームが開始されました。あなたの役職は「${roleObj.name}」です`, 'system');
+  btnConfirmMyRole.onclick = () => {
+    sound.playSuccess();
+    closeModal(roleAnnouncementModal);
+    gameView.style.display = 'flex';
+    myRoleName.textContent = r.name;
+    myRoleIcon.textContent = r.icon;
+    myRoleDesc.textContent = r.desc;
+    myRoleCampBadge.textContent = r.campName;
+    myRoleCampBadge.className = 'role-badge ' + (r.camp === 'werewolf' ? 'werewolf' : 'villager');
+    updateGamePhaseUI(room);
+  };
+}
+
+// --- In-Game Screen Phase Updates ---
+function updateTimerBadge(timerSec) {
+  if (!currentRoomData || !currentRoomData.game) return;
+  const g = currentRoomData.game;
+  const phase = g.phase;
+
+  if (phase === 'morning_discussion') {
+    gamePhaseText.textContent = `朝の話し合い (残り${timerSec}秒)`;
+  } else if (phase === 'morning_voting') {
+    gamePhaseText.textContent = `追放投票タイム (残り${timerSec}秒)`;
+  } else if (phase === 'morning_execution') {
+    gamePhaseText.textContent = `追放結果発表 (残り${timerSec}秒)`;
+  } else if (phase.startsWith('night_')) {
+    gamePhaseText.textContent = `${g.phaseTitle || '夜の行動'} (残り${timerSec}秒)`;
+  } else if (phase === 'morning_result') {
+    gamePhaseText.textContent = `昨夜の結果発表 (残り${timerSec}秒)`;
+  } else if (phase === 'hunter_revenge') {
+    gamePhaseText.textContent = `ハンター道連れ選択 (残り${timerSec}秒)`;
+  }
 }
 
 function updateGamePhaseUI(room) {
@@ -833,95 +957,161 @@ function updateGamePhaseUI(room) {
   const g = room.game;
   gameDayCountText.textContent = `${g.dayCount || 1}日目`;
 
-  if (g.phase === 'night') {
-    gamePhaseIcon.textContent = '🌙';
-    gamePhaseText.textContent = `夜の行動 (残り${g.timerSec || 30}秒)`;
-    gamePhaseBadge.className = 'game-phase-badge night';
-    gameActionPrompt.textContent = mySecretRole === 'werewolf' 
-      ? '🐺 襲撃するプレイヤーを選択してください:' 
-      : mySecretRole === 'seer' 
-      ? '🔮 占うプレイヤーを選択してください:' 
-      : mySecretRole === 'hunter_guard'
-      ? '🛡️ 今夜守るプレイヤーを選択してください:'
-      : '🌙 夜の行動中（他のプレイヤーの行動を待っています）';
-  } else if (g.phase === 'discussion') {
+  // Update Dramatic Cutscene Banners & Audio
+  if (g.phase === 'morning_discussion') {
+    sound.playBellSound ? sound.playBellSound() : sound.playClick();
     gamePhaseIcon.textContent = '☀️';
-    gamePhaseText.textContent = `昼の議論タイム (残り${g.timerSec || 60}秒)`;
     gamePhaseBadge.className = 'game-phase-badge day';
-    gameActionPrompt.textContent = '🗣️ ボイスチャットまたは左上チャットで話し合ってください:';
-  } else if (g.phase === 'voting') {
+    cutsceneTitle.textContent = `☀️ ${g.dayCount}日目の朝が来ました`;
+    cutsceneBody.innerHTML = `朝の話し合いタイムです。VCまたは左上のチャットで話し合ってください。<br><strong style="color: var(--crimson);">※ 話し合い終了後、怪しい人物を追放投票します。</strong>`;
+    gameActionPrompt.textContent = '👥 参加者一覧 (話し合い中):';
+  } else if (g.phase === 'morning_voting') {
+    sound.playClick();
     gamePhaseIcon.textContent = '🗳️';
-    gamePhaseText.textContent = `追放投票タイム (残り${g.timerSec || 30}秒)`;
     gamePhaseBadge.className = 'game-phase-badge voting';
-    gameActionPrompt.textContent = '🗳️ 追放したいプレイヤーに投票してください:';
-  } else if (g.phase === 'execution') {
+    cutsceneTitle.textContent = '🗳️ 追放投票タイム';
+    cutsceneBody.textContent = '怪しいと思うプレイヤーを1人選んで投票してください。最も票を集めたプレイヤーが追放されます。';
+    gameActionPrompt.textContent = '🗳️ 追放したいプレイヤーを選択:';
+  } else if (g.phase === 'morning_execution') {
+    sound.playExileSound ? sound.playExileSound() : sound.playWolfHowl();
     gamePhaseIcon.textContent = '⚖️';
-    const exiledName = g.lastExiled ? g.lastExiled.nickname : 'なし';
-    gamePhaseText.textContent = `追放結果発表: ${exiledName}`;
     gamePhaseBadge.className = 'game-phase-badge voting';
-    gameActionPrompt.textContent = `⚖️ 投票により「${exiledName}」が追放されました。`;
-  } else if (g.phase === 'game_over') {
-    gamePhaseIcon.textContent = '🏆';
-    const winTeam = g.winner === 'werewolf' ? '人狼チームの勝利！🐺' : '村人チームの勝利！🎉';
-    gamePhaseText.textContent = `勝敗決定: ${winTeam}`;
-    gameActionPrompt.textContent = `🏆 ${winTeam}`;
+    const exiled = g.lastExiled;
+    if (exiled) {
+      cutsceneTitle.textContent = `⚖️ 審判の結果:「${exiled.nickname}」が追放されました`;
+      cutsceneBody.innerHTML = `投票により <strong>${exiled.nickname}</strong> が村から追放されました。<br>${exiled.role === 'werewolf' ? '<span style="color: var(--emerald); font-weight: 800;">🎉 人狼の追放に成功しました！</span>' : '<span style="color: var(--crimson);">⚠️ 村人陣営のプレイヤーでした...</span>'}`;
+    } else {
+      cutsceneTitle.textContent = '⚖️ 追放なし';
+      cutsceneBody.textContent = '同票のため、今回の追放者は出ませんでした。';
+    }
+    // Traitor revealed if Mayor died
+    if (g.revealedTraitor) {
+      cutsceneBody.innerHTML += `<br><strong style="color: var(--gold); font-size: 0.95rem;">🎖️ 村長の遺言発動！ 裏切り者は「${g.revealedTraitor.nickname}」です！</strong>`;
+    }
+  } else if (g.phase === 'hunter_revenge') {
+    gamePhaseIcon.textContent = '🎯';
+    cutsceneTitle.textContent = '🎯 ハンターの最後の道連れ射撃！';
+    cutsceneBody.textContent = 'ハンターが死亡時に発動する特殊能力！道連れにする相手を1人選択できます。';
+    gameActionPrompt.textContent = mySecretRole === 'hunter_avenger' ? '🎯 道連れにする相手を1人選択してください:' : 'ハンターの道連れ選択を待っています...';
+  } else if (g.phase.startsWith('night_')) {
+    gamePhaseIcon.textContent = '🌙';
+    gamePhaseBadge.className = 'game-phase-badge night';
+    cutsceneTitle.textContent = `🌙 夜のターン: ${g.phaseTitle || ''}`;
 
-    // Award coins for playing
-    userCoins += 50;
-    updateCoinsDisplay();
-    scheduleProfileSync();
-    showToast(`ゲーム終了！勝利報酬として +50 コインを獲得しました🪙`);
+    if (g.phase === 'night_guard') {
+      cutsceneBody.textContent = '狩人のターンです。人狼が襲撃する前に守りたい人を1人護衛できます。';
+      gameActionPrompt.textContent = mySecretRole === 'hunter_guard' ? '🛡️ 今夜守るプレイヤーを選択:' : '狩人が護衛対象を選択中...';
+    } else if (g.phase === 'night_werewolf') {
+      sound.playWolfHowl();
+      cutsceneBody.textContent = '人狼のターンです。襲撃して殺害するプレイヤーを1人選択します。';
+      gameActionPrompt.textContent = mySecretRole === 'werewolf' ? '🐺 襲撃して殺害するプレイヤーを選択:' : '人狼が獲物を狙っています...';
+    } else if (g.phase === 'night_seer') {
+      cutsceneBody.textContent = '占い師のターンです。占いたいプレイヤーの役職（人狼か市民か）を見抜きます。';
+      gameActionPrompt.textContent = mySecretRole === 'seer' ? '🔮 占うプレイヤーを選択:' : '占い師が水晶を覗いています...';
+    } else if (g.phase === 'night_medium') {
+      cutsceneBody.textContent = '霊媒師のターンです。直前に追放されたプレイヤーの魂と対話します。';
+      gameActionPrompt.textContent = mySecretRole === 'medium' ? '🕯️ 追放者の役職結果を確認中...' : '霊媒師が交信中...';
+    } else if (g.phase === 'night_archer') {
+      cutsceneBody.textContent = 'アーチャーのターンです。一度だけ誰かを狙撃（殺害）できます。';
+      gameActionPrompt.textContent = mySecretRole === 'archer' ? '🏹 狙撃するプレイヤーを選択 (しない場合は待機):' : 'アーチャーが狙撃体勢に入っています...';
+    } else if (g.phase === 'night_medic') {
+      cutsceneBody.textContent = 'メディのターンです。死亡した味方を一度だけ蘇生できます。';
+      gameActionPrompt.textContent = mySecretRole === 'medic' ? '💉 復活させるプレイヤーを選択:' : 'メディが治療を行っています...';
+    }
+  } else if (g.phase === 'morning_result') {
+    gamePhaseIcon.textContent = '🌅';
+    gamePhaseBadge.className = 'game-phase-badge day';
+    const vic = g.lastVictim;
+    if (vic) {
+      cutsceneTitle.textContent = '🌅 昨夜の犠牲者';
+      cutsceneBody.innerHTML = `無残にも <strong>${vic.nickname}</strong> が命を落としました...`;
+    } else {
+      cutsceneTitle.textContent = '🌅 平穏な朝';
+      cutsceneBody.textContent = '昨夜の犠牲者はいませんでした！（狩人の護衛成功、または襲撃なし）';
+    }
+    if (g.revealedTraitor) {
+      cutsceneBody.innerHTML += `<br><strong style="color: var(--gold); font-size: 0.95rem;">🎖️ 村長死亡！ 裏切り者の正体は「${g.revealedTraitor.nickname}」です！</strong>`;
+    }
+  } else if (g.phase === 'game_over') {
+    sound.playVictorySound ? sound.playVictorySound() : sound.playSuccess();
+    gamePhaseIcon.textContent = '🏆';
+    cutsceneTitle.textContent = g.winnerTitle || (g.winner === 'werewolf' ? '🐺 人狼チームの勝利！' : '🎉 村人チームの勝利！');
+    cutsceneBody.innerHTML = `<div style="font-size: 1.1rem; font-weight: 900; color: ${g.winner === 'werewolf' ? 'var(--crimson)' : 'var(--emerald)'};">${g.winner === 'werewolf' ? '市民チームが2人以下になり、人狼チームが村を支配しました！' : 'すべての人狼が追放され、村に平和が戻りました！'}</div><div style="margin-top: 8px; font-size: 0.82rem; color: var(--text-muted);">勝利報酬: +50 コインを獲得しました🪙</div>`;
+    btnReturnToLobby.style.display = 'block';
   }
 
-  // Render game players grid
+  // Render Players Grid with interactive action buttons
   gamePlayersGrid.innerHTML = '';
   const players = Object.values(room.players || {});
+  const me = room.players[localPlayerId];
+
   players.forEach((p) => {
     const isMe = p.id === localPlayerId;
     const card = document.createElement('div');
     card.className = 'game-player-card' + (!p.isAlive ? ' is-dead' : '') + (p.isSpeaking ? ' speaking' : '');
     card.id = `game_player_${p.id}`;
 
-    let actionBtnHtml = '';
-    if (p.isAlive && !isMe) {
-      if (g.phase === 'night') {
-        if (mySecretRole === 'werewolf') actionBtnHtml = `<button class="btn-target-select" data-target="${p.id}">襲撃</button>`;
-        if (mySecretRole === 'seer') actionBtnHtml = `<button class="btn-target-select" data-target="${p.id}">占う</button>`;
-        if (mySecretRole === 'hunter_guard') actionBtnHtml = `<button class="btn-target-select" data-target="${p.id}">護衛</button>`;
-      } else if (g.phase === 'voting') {
-        actionBtnHtml = `<button class="btn-target-select" data-target="${p.id}">投票</button>`;
+    let actionBtnText = null;
+    let actionType = null;
+
+    if (me && me.isAlive && p.isAlive && !isMe) {
+      if (g.phase === 'morning_voting') {
+        actionBtnText = '🗳️ 投票';
+        actionType = 'CAST_VOTE';
+      } else if (g.phase === 'night_guard' && mySecretRole === 'hunter_guard') {
+        actionBtnText = '🛡️ 護衛';
+        actionType = 'GUARD_TARGET';
+      } else if (g.phase === 'night_werewolf' && mySecretRole === 'werewolf') {
+        actionBtnText = '🐺 襲撃';
+        actionType = 'WEREWOLF_KILL';
+      } else if (g.phase === 'night_seer' && mySecretRole === 'seer') {
+        actionBtnText = '🔮 占う';
+        actionType = 'SEER_DIVINE';
+      } else if (g.phase === 'night_archer' && mySecretRole === 'archer') {
+        actionBtnText = '🏹 狙撃';
+        actionType = 'ARCHER_SHOT';
+      }
+    } else if (me && g.phase === 'hunter_revenge' && mySecretRole === 'hunter_avenger' && p.isAlive && !isMe) {
+      actionBtnText = '🎯 道連れ';
+      actionType = 'HUNTER_REVENGE';
+    } else if (me && me.isAlive && !p.isAlive && g.phase === 'night_medic' && mySecretRole === 'medic') {
+      actionBtnText = '💉 復活';
+      actionType = 'MEDIC_REVIVE';
+    }
+
+    // Role reveal on game over
+    let revealedRoleHtml = '';
+    if (g.phase === 'game_over' && g.allRolesRevealed && g.allRolesRevealed[p.id]) {
+      const r = ALL_ROLES_MAP[g.allRolesRevealed[p.id].role];
+      if (r) {
+        revealedRoleHtml = `<div style="font-size: 0.75rem; font-weight: 800; color: ${r.camp === 'werewolf' ? 'var(--crimson)' : 'var(--villager-color)'}; margin-top: 4px;">${r.icon} ${r.name}</div>`;
       }
     }
 
     card.innerHTML = `
-      <div style="font-size: 1.8rem; margin-bottom: 4px;">👤</div>
+      <div style="font-size: 1.8rem; margin-bottom: 2px;">👤</div>
       <div style="font-weight: 800; font-size: 0.88rem; color: var(--text-main);">${p.nickname}</div>
-      <div style="font-size: 0.72rem; color: ${p.isAlive ? 'var(--emerald)' : 'var(--crimson)'}; font-weight: 700;">
+      <div style="font-size: 0.72rem; color: ${p.isAlive ? 'var(--emerald)' : 'var(--crimson)'}; font-weight: 800;">
         ${p.isAlive ? '生存' : '追放/死亡'}
       </div>
-      ${actionBtnHtml}
+      ${revealedRoleHtml}
+      ${actionBtnText ? `<button class="btn-target-select" data-action="${actionType}" data-target="${p.id}">${actionBtnText}</button>` : ''}
     `;
 
-    const selectBtn = card.querySelector('.btn-target-select');
-    if (selectBtn) {
-      selectBtn.addEventListener('click', () => {
+    const btn = card.querySelector('.btn-target-select');
+    if (btn) {
+      btn.addEventListener('click', () => {
         sound.playClick();
-        if (g.phase === 'night') {
-          sendWs('GAME_ACTION', { action: 'NIGHT_TARGET', targetId: p.id });
-          showToast(`「${p.nickname}」をターゲットに選択しました`);
-        } else if (g.phase === 'voting') {
-          sendWs('GAME_ACTION', { action: 'CAST_VOTE', targetId: p.id });
-          showToast(`「${p.nickname}」に投票しました`);
-        }
+        sendWs('GAME_ACTION', { action: actionType, targetId: p.id });
+        showToast(`「${p.nickname}」を選択しました`);
       });
     }
 
     gamePlayersGrid.appendChild(card);
   });
 
-  // Host Next Phase button
-  const isMeHost = (room.hostId === localPlayerId);
-  if (isMeHost && g.phase !== 'game_over') {
+  // Host Skip / Advance button
+  if (room.hostId === localPlayerId && g.phase !== 'game_over') {
     btnHostNextPhase.style.display = 'block';
   } else {
     btnHostNextPhase.style.display = 'none';
@@ -931,20 +1121,28 @@ function updateGamePhaseUI(room) {
 if (btnHostNextPhase) {
   btnHostNextPhase.addEventListener('click', () => {
     sound.playClick();
-    sendWs('GAME_ACTION', { action: 'NEXT_PHASE' });
+    sendWs('GAME_ACTION', { action: 'HOST_SKIP_PHASE' });
+  });
+}
+
+if (btnReturnToLobby) {
+  btnReturnToLobby.addEventListener('click', () => {
+    gameView.style.display = 'none';
+    onlineHubView.style.display = 'block';
+    openModal(onlinePlayModal);
   });
 }
 
 // --- Roles Guide & Shop Renderers ---
 function renderRoles(campFilter = 'all') {
   rolesList.innerHTML = '';
-  const filtered = BASE_ROLES.concat(SHOP_ROLES).filter((r) => {
+  const filtered = BASE_ROLES.concat(SHOP_ROLES).filter(r => {
     if (campFilter === 'all') return true;
     if (campFilter === 'shop') return SHOP_ROLES.some(s => s.id === r.id);
     return r.camp === campFilter;
   });
 
-  filtered.forEach((r) => {
+  filtered.forEach(r => {
     const isUnlocked = BASE_ROLES.some(b => b.id === r.id) || unlockedRoles.includes(r.id);
     const card = document.createElement('div');
     card.className = 'role-card';
@@ -968,7 +1166,7 @@ function renderRoles(campFilter = 'all') {
 
 function renderShop() {
   shopItemsList.innerHTML = '';
-  SHOP_ROLES.forEach((r) => {
+  SHOP_ROLES.forEach(r => {
     const isUnlocked = unlockedRoles.includes(r.id);
     const card = document.createElement('div');
     card.className = 'shop-item-card';
@@ -1020,14 +1218,12 @@ btnOpenSettings.addEventListener('click', () => {
   setMicState(voiceManager.isMicMuted);
   openModal(settingsModal);
 });
-
 topNicknameChip.addEventListener('click', () => btnOpenSettings.click());
 btnCloseSettings.addEventListener('click', () => closeModal(settingsModal));
 btnFinishSettings.addEventListener('click', () => closeModal(settingsModal));
 
 settingsNicknameInput.addEventListener('input', (e) => {
-  const val = e.target.value;
-  settingsCharCounter.textContent = `${val.length}/8`;
+  settingsCharCounter.textContent = `${e.target.value.length}/8`;
   settingsErrorMsg.classList.remove('visible');
 });
 
@@ -1041,27 +1237,17 @@ btnSaveNickname.addEventListener('click', () => {
   showToast(`ニックネームを「${val}」に変更しました`);
 });
 
-vcVolumeSlider.addEventListener('input', (e) => {
-  updateVcVolumeUI(parseInt(e.target.value, 10));
+vcVolumeSlider.addEventListener('input', (e) => updateVcVolumeUI(parseInt(e.target.value, 10)));
+presetPills.forEach(pill => {
+  pill.addEventListener('click', () => updateVcVolumeUI(parseInt(pill.getAttribute('data-preset'), 10)));
 });
-
-presetPills.forEach((pill) => {
-  pill.addEventListener('click', () => {
-    const p = parseInt(pill.getAttribute('data-preset'), 10);
-    updateVcVolumeUI(p);
-  });
-});
-
 btnTestVolume.addEventListener('click', () => {
   sound.playVcTest();
-  showToast(`🔊 音量テスト再生中 (${vcVolume}%)`);
+  showToast(`🔊 音量テスト (${vcVolume}%)`);
 });
 
-// Role Guide Tab buttons
-btnRoleGuide.addEventListener('click', () => {
-  renderRoles('all');
-  openModal(roleGuideModal);
-});
+// Role Guide & Shop
+btnRoleGuide.addEventListener('click', () => { renderRoles('all'); openModal(roleGuideModal); });
 btnCloseRoleGuide.addEventListener('click', () => closeModal(roleGuideModal));
 btnFinishRoleGuide.addEventListener('click', () => closeModal(roleGuideModal));
 
@@ -1070,11 +1256,7 @@ tabRoleVillager.addEventListener('click', () => renderRoles('villager'));
 tabRoleWerewolf.addEventListener('click', () => renderRoles('werewolf'));
 tabRoleShop.addEventListener('click', () => renderRoles('shop'));
 
-// Shop
-btnOpenShop.addEventListener('click', () => {
-  renderShop();
-  openModal(shopModal);
-});
+btnOpenShop.addEventListener('click', () => { renderShop(); openModal(shopModal); });
 topCoinsChip.addEventListener('click', () => btnOpenShop.click());
 btnCloseShop.addEventListener('click', () => closeModal(shopModal));
 btnFinishShop.addEventListener('click', () => closeModal(shopModal));
@@ -1097,15 +1279,11 @@ btnCloseOnlinePlay.addEventListener('click', () => closeModal(onlinePlayModal));
 btnCardCreateRoom.addEventListener('click', () => {
   onlineHubView.style.display = 'none';
   onlineCreateRoomView.style.display = 'block';
+  updateCreateRoomUI();
 });
 btnCancelCreateRoom.addEventListener('click', () => {
   onlineCreateRoomView.style.display = 'none';
   onlineHubView.style.display = 'block';
-});
-
-roomPlayerCountSlider.addEventListener('input', (e) => {
-  createRoomPlayerCount = parseInt(e.target.value, 10);
-  playerCountDisplay.textContent = `${createRoomPlayerCount}人`;
 });
 
 btnCardShowJoinInput.addEventListener('click', () => {
@@ -1119,23 +1297,35 @@ btnConfirmCreateRoom.addEventListener('click', async () => {
     const code = Math.floor(1000 + Math.random() * 9000).toString();
     showToast('部屋を作成中...');
 
-    // 1. Sync to Firestore (and local memory)
+    let finalConfig = {};
+    if (createRoomMode === 'normal') {
+      finalConfig = getNormalRolesConfig(createRoomPlayerCount);
+    } else {
+      finalConfig = { ...originalRolesConfig };
+    }
+    const finalRolesList = expandRolesList(finalConfig);
+
     const roomData = await createFirestoreRoom(code, localPlayerId, localNickname, {
       maxPlayers: createRoomPlayerCount,
-      roleMode: createRoomMode
+      discussionTime: createRoomDiscussionTime,
+      roleMode: createRoomMode,
+      rolesConfig: finalConfig,
+      rolesList: finalRolesList
     });
 
     activeRoomCode = code;
     isHost = true;
     enterLobbyView(code, roomData);
 
-    // 2. Notify WebSocket server
     sendWs('CREATE_ROOM', {
       code,
       playerId: localPlayerId,
       nickname: localNickname,
       maxPlayers: createRoomPlayerCount,
+      discussionTime: createRoomDiscussionTime,
       roleMode: createRoomMode,
+      rolesConfig: finalConfig,
+      rolesList: finalRolesList,
       isVcOn: voiceManager.isVcEnabled
     });
 
@@ -1193,10 +1383,7 @@ btnInviteShare.addEventListener('click', () => {
   if (!activeRoomCode) return;
   const inviteText = lobbyInvitePreviewText.textContent;
   if (navigator.share) {
-    navigator.share({
-      title: '人狼オンライン 招待',
-      text: inviteText
-    }).catch(() => {});
+    navigator.share({ title: '人狼オンライン 招待', text: inviteText }).catch(() => {});
   } else {
     navigator.clipboard.writeText(inviteText).then(() => {
       showToast('✉️ 招待メッセージをコピーしました！友達に送信してください');
@@ -1222,9 +1409,8 @@ btnLeaveRoom.addEventListener('click', async () => {
 
 // Initial Nickname modal
 initialNicknameInput.addEventListener('input', (e) => {
-  const val = e.target.value;
-  initialCharCounter.textContent = `${val.length}/8`;
-  if (validateNickname(val)) initialErrorMsg.classList.remove('visible');
+  initialCharCounter.textContent = `${e.target.value.length}/8`;
+  if (validateNickname(e.target.value)) initialErrorMsg.classList.remove('visible');
 });
 
 btnConfirmInitialNickname.addEventListener('click', () => {
@@ -1243,7 +1429,7 @@ btnConfirmInitialNickname.addEventListener('click', () => {
 function initApp() {
   updateCoinsDisplay();
   updateVcVolumeUI(vcVolume);
-  setVcState(true); // VC ON by default as requested
+  setVcState(true); // VC ON by default
 
   if (!localNickname || !validateNickname(localNickname)) {
     openModal(initialNicknameModal);
@@ -1252,7 +1438,6 @@ function initApp() {
     scheduleProfileSync();
   }
 
-  // Handle URL parameter for room code (?room=1234)
   const urlParams = new URLSearchParams(window.location.search);
   const roomParam = urlParams.get('room');
   if (roomParam && /^\d{4}$/.test(roomParam)) {

@@ -163,28 +163,75 @@ export class WerewolfAudio {
     } catch (e) {}
   }
 
-  // Grand Role Unlocked Fanfare sound
-  playUnlockSound() {
+  // Morning church / village bell sound
+  playBellSound() {
     this.init();
     if (!this.ctx) return;
     try {
-      const notes = [440, 554.37, 659.25, 880];
+      const freqs = [350, 440, 520];
       const now = this.ctx.currentTime;
-      notes.forEach((freq, idx) => {
+      freqs.forEach((freq, idx) => {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now + idx * 0.05);
+
+        gain.gain.setValueAtTime(0.18, now + idx * 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.05 + 1.8);
+
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start(now + idx * 0.05);
+        osc.stop(now + idx * 0.05 + 1.9);
+      });
+    } catch (e) {}
+  }
+
+  // Dramatic exile judgment sound
+  playExileSound() {
+    this.init();
+    if (!this.ctx) return;
+    try {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sawtooth';
+      const now = this.ctx.currentTime;
+      osc.frequency.setValueAtTime(150, now);
+      osc.frequency.exponentialRampToValueAtTime(60, now + 0.8);
+
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+      osc.start(now);
+      osc.stop(now + 0.95);
+    } catch (e) {}
+  }
+
+  // Victory fanfare sound
+  playVictorySound() {
+    this.init();
+    if (!this.ctx) return;
+    try {
+      const chords = [523.25, 659.25, 783.99, 1046.50];
+      const now = this.ctx.currentTime;
+      chords.forEach((freq, idx) => {
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'triangle';
-        const start = now + idx * 0.08;
+        const start = now + idx * 0.1;
         osc.frequency.setValueAtTime(freq, start);
 
-        gain.gain.setValueAtTime(0.16, start);
-        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.4);
+        gain.gain.setValueAtTime(0.15, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.6);
 
         osc.connect(gain);
         gain.connect(this.masterGain);
         osc.start(start);
-        osc.stop(start + 0.42);
+        osc.stop(start + 0.65);
       });
     } catch (e) {}
   }
 }
+

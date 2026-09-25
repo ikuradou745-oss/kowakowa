@@ -16,7 +16,7 @@ const HOST = '0.0.0.0';
 function ensureGameBundle() {
   const bundlePath = path.join(__dirname, 'game.js');
   if (!fs.existsSync(bundlePath)) {
-    console.log('[jinrou-online] game.js not found. Bundling src/main.js with esbuild...');
+    console.log('[jinrou-online] Bundling src/main.js with esbuild...');
     try {
       execSync('npx esbuild src/main.js --bundle --outfile=game.js --format=esm', {
         cwd: __dirname,
@@ -41,7 +41,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Never cache index.html or game.js
+// Cache control
 app.use((req, res, next) => {
   if (req.path === '/game.js' || req.path === '/' || req.path === '/index.html') {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -57,7 +57,6 @@ app.get('/game.js', (req, res) => {
   const bundlePath = path.join(__dirname, 'game.js');
   if (fs.existsSync(bundlePath)) {
     res.setHeader('Content-Type', 'application/javascript; charset=UTF-8');
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.sendFile(bundlePath);
   } else {
     ensureGameBundle();
@@ -73,7 +72,6 @@ app.get('/game.js', (req, res) => {
 app.use(express.static(__dirname));
 
 // --- In-Memory Room Management ---
-// roomCode -> { code, hostId, hostNickname, status, maxPlayers, roleMode, rolesConfig, rolesList, players: Map<id, player>, sockets: Map<id, ws>, game: {...}, chatHistory: [] }
 const rooms = new Map();
 
 function generateRoomCode() {
@@ -90,13 +88,13 @@ function getRoomSnapshot(room) {
   for (const [id, p] of room.players.entries()) {
     playersObj[id] = {
       id: p.id,
-      nickname: p.nickname || p.name || 'プレイヤー',
+      nickname: p.nickname || 'プレイヤー',
       isHost: !!p.isHost,
-      isLeader: !!p.isHost,
       isAlive: p.isAlive !== false,
       isVcOn: p.isVcOn !== false,
       isMuted: !!p.isMuted,
       isSpeaking: !!p.isSpeaking,
+      hasVoted: room.game ? !!room.game.votes[id] : false,
       joinedAt: p.joinedAt || Date.now()
     };
   }
@@ -105,9 +103,8 @@ function getRoomSnapshot(room) {
     hostId: room.hostId,
     hostNickname: room.hostNickname || 'ホスト',
     status: room.status || 'waiting',
-    phase: room.game ? room.game.phase : 'waiting',
-    dayCount: room.game ? room.game.dayCount : 1,
     maxPlayers: room.maxPlayers || 5,
+    discussionTime: room.discussionTime || 60,
     roleMode: room.roleMode || 'normal',
     rolesConfig: room.rolesConfig || {},
     rolesList: room.rolesList || [],
@@ -116,12 +113,16 @@ function getRoomSnapshot(room) {
     chatHistory: (room.chatHistory || []).slice(-30),
     game: room.game ? {
       phase: room.game.phase,
+      phaseTitle: room.game.phaseTitle,
       dayCount: room.game.dayCount,
       timerSec: room.game.timerSec,
       lastExiled: room.game.lastExiled,
       lastVictim: room.game.lastVictim,
+      revealedTraitor: room.game.revealedTraitor,
+      hunterRevengeTarget: room.game.hunterRevengeTarget,
       winner: room.game.winner,
-      seerResult: room.game.seerResult
+      winnerTitle: room.game.winnerTitle,
+      allRolesRevealed: room.game.allRolesRevealed || null
     } : null
   };
 }
@@ -152,7 +153,6 @@ function assignRoles(playerIds, configuredRolesList) {
   const shuffledIds = [...playerIds].sort(() => Math.random() - 0.5);
   let pool = [...(configuredRolesList || [])];
 
-  // If pool does not match player count, create standard balanced pool
   if (pool.length < shuffledIds.length) {
     const count = shuffledIds.length;
     if (count === 3) {
@@ -161,6 +161,8 @@ function assignRoles(playerIds, configuredRolesList) {
       pool = ['werewolf', 'seer', 'hunter_guard', 'villager'];
     } else if (count === 5) {
       pool = ['werewolf', 'traitor', 'seer', 'hunter_guard', 'villager'];
+    } else if (count === 6) {
+      pool = ['werewolf', 'werewolf', 'seer', 'hunter_guard', 'medium', 'villager'];
     } else {
       pool = ['werewolf', 'werewolf', 'traitor', 'seer', 'hunter_guard', 'medium'];
       while (pool.length < count) {
@@ -174,7 +176,6 @@ function assignRoles(playerIds, configuredRolesList) {
     pool[0] = 'werewolf';
   }
 
-  // Shuffle roles
   const shuffledRoles = [...pool].sort(() => Math.random() - 0.5);
   const assignments = {};
   shuffledIds.forEach((pid, idx) => {
@@ -183,7 +184,7 @@ function assignRoles(playerIds, configuredRolesList) {
   return assignments;
 }
 
-// --- REST Endpoints for compatibility ---
+// REST Endpoints
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', app: 'jinrou-online', activeRooms: rooms.size });
 });
@@ -208,13 +209,15 @@ app.post('/api/jinrou/rooms', (req, res) => {
       hostNickname,
       status: 'waiting',
       maxPlayers: Number(data.maxPlayers) || 5,
+      discussionTime: Number(data.discussionTime) || 60,
       roleMode: data.roleMode || 'normal',
       rolesConfig: data.rolesConfig || {},
       rolesList: data.rolesList || [],
       players: new Map(),
       sockets: new Map(),
       chatHistory: [],
-      game: null
+      game: null,
+      timerInterval: null
     };
     rooms.set(code, room);
   }
@@ -263,15 +266,8 @@ app.post('/api/jinrou/rooms/:code/leave', (req, res) => {
     room.players.delete(playerId);
     room.sockets.delete(playerId);
     if (room.players.size === 0) {
+      if (room.timerInterval) clearInterval(room.timerInterval);
       rooms.delete(req.params.code);
-    } else if (room.hostId === playerId) {
-      const firstId = room.players.keys().next().value;
-      room.hostId = firstId;
-      const newHost = room.players.get(firstId);
-      if (newHost) {
-        newHost.isHost = true;
-        room.hostNickname = newHost.nickname;
-      }
     }
   }
   res.json({ success: true });
@@ -294,7 +290,6 @@ wss.on('connection', (ws) => {
       const { type, payload } = msg;
 
       switch (type) {
-        // --- Room Creation & Joining ---
         case 'CREATE_ROOM': {
           const code = (payload.code || generateRoomCode()).toString();
           clientRoomCode = code;
@@ -306,13 +301,15 @@ wss.on('connection', (ws) => {
             hostNickname: payload.nickname || 'ホスト',
             status: 'waiting',
             maxPlayers: Number(payload.maxPlayers) || 5,
+            discussionTime: Number(payload.discussionTime) || 60,
             roleMode: payload.roleMode || 'normal',
             rolesConfig: payload.rolesConfig || {},
             rolesList: payload.rolesList || [],
             players: new Map(),
             sockets: new Map(),
             chatHistory: [],
-            game: null
+            game: null,
+            timerInterval: null
           };
 
           room.players.set(payload.playerId, {
@@ -341,13 +338,13 @@ wss.on('connection', (ws) => {
           if (!room) {
             return ws.send(JSON.stringify({
               type: 'ERROR',
-              payload: { message: `部屋（#${code}）が見つかりません。コードを確認してください。` }
+              payload: { message: `部屋（#${code}）が見つかりません。` }
             }));
           }
           if (room.status !== 'waiting') {
             return ws.send(JSON.stringify({
               type: 'ERROR',
-              payload: { message: 'ゲームが既に開始されているか、終了しています。' }
+              payload: { message: 'ゲームが既に開始されています。' }
             }));
           }
           if (room.players.size >= (room.maxPlayers || 12) && !room.players.has(payload.playerId)) {
@@ -376,7 +373,6 @@ wss.on('connection', (ws) => {
           ws.send(JSON.stringify({ type: 'ROOM_JOINED', payload: snap }));
           broadcastToRoom(code, { type: 'ROOM_UPDATE', payload: snap }, ws);
 
-          // Notify existing peers to initiate WebRTC audio connection
           broadcastToRoom(code, {
             type: 'PEER_JOINED',
             payload: {
@@ -419,22 +415,30 @@ wss.on('connection', (ws) => {
           for (const [pid, p] of room.players.entries()) {
             p.role = roleAssignments[pid] || 'villager';
             p.isAlive = true;
+            p.usedArcher = false;
+            p.usedMedic = false;
           }
 
           room.status = 'in_game';
           room.game = {
-            phase: 'night', // Start at night
+            phase: 'role_reveal', // 1. Secret role announcement first
+            phaseTitle: '📜 役職告知・確認',
             dayCount: 1,
-            timerSec: 30,
-            targets: {}, // role actions: werewolf -> target, seer -> target, hunter -> target
-            votes: {}, // playerId -> targetId
+            timerSec: 10, // 10 seconds for initial role reveal
+            votes: {}, // voterId -> targetId
+            nightActions: {}, // role -> targetId
             lastExiled: null,
             lastVictim: null,
-            seerResult: null,
-            winner: null
+            revealedTraitor: null,
+            hunterRevengeTarget: null,
+            winner: null,
+            winnerTitle: null
           };
 
-          // Send game start to all with personalized role information
+          // Start server authoritative phase timer
+          startRoomTimer(room);
+
+          // Broadcast game started with secret personal role
           for (const [pid, client] of room.sockets.entries()) {
             if (client && client.readyState === WebSocket.OPEN) {
               const myRole = roleAssignments[pid] || 'villager';
@@ -450,7 +454,7 @@ wss.on('connection', (ws) => {
           break;
         }
 
-        // --- Game Actions (Night target, Day vote, Phase transitions) ---
+        // --- Game Actions ---
         case 'GAME_ACTION': {
           if (!clientRoomCode || !clientPlayerId) return;
           const room = rooms.get(clientRoomCode);
@@ -458,39 +462,9 @@ wss.on('connection', (ws) => {
 
           const { action, targetId } = payload;
           const p = room.players.get(clientPlayerId);
-          if (!p || !p.isAlive) return;
+          if (!p) return;
 
-          if (action === 'NIGHT_TARGET') {
-            room.game.targets[clientPlayerId] = {
-              role: p.role,
-              targetId
-            };
-
-            // If Seer, compute result immediately for them
-            if (p.role === 'seer' && targetId) {
-              const targetPlayer = room.players.get(targetId);
-              const isWolf = targetPlayer && targetPlayer.role === 'werewolf';
-              ws.send(JSON.stringify({
-                type: 'SEER_RESULT',
-                payload: {
-                  targetId,
-                  targetNickname: targetPlayer ? targetPlayer.nickname : '対象',
-                  isWerewolf: isWolf
-                }
-              }));
-            }
-          } else if (action === 'CAST_VOTE') {
-            room.game.votes[clientPlayerId] = targetId;
-            broadcastToRoom(clientRoomCode, {
-              type: 'VOTE_RECORDED',
-              payload: { voterId: clientPlayerId, totalVotes: Object.keys(room.game.votes).length }
-            });
-          } else if (action === 'NEXT_PHASE') {
-            // Host or system advancing phase
-            if (room.hostId === clientPlayerId) {
-              handlePhaseAdvance(room);
-            }
-          }
+          handlePlayerGameAction(room, p, action, targetId, ws);
           break;
         }
 
@@ -519,7 +493,6 @@ wss.on('connection', (ws) => {
           room.chatHistory.push(chatMsg);
           if (room.chatHistory.length > 50) room.chatHistory.shift();
 
-          // Broadcast chat message to everyone in room
           broadcastToRoom(clientRoomCode, {
             type: 'CHAT_MESSAGE',
             payload: chatMsg
@@ -527,7 +500,7 @@ wss.on('connection', (ws) => {
           break;
         }
 
-        // --- WebRTC Audio Signaling (Mesh / P2P Audio Voice Chat) ---
+        // --- WebRTC Audio Signaling ---
         case 'WEBRTC_SIGNAL': {
           if (!clientRoomCode) return;
           const room = rooms.get(clientRoomCode);
@@ -535,7 +508,6 @@ wss.on('connection', (ws) => {
 
           const { targetId, signal } = payload;
           if (targetId) {
-            // Forward signal directly to target peer
             sendToPlayer(clientRoomCode, targetId, {
               type: 'WEBRTC_SIGNAL',
               payload: {
@@ -545,7 +517,6 @@ wss.on('connection', (ws) => {
               }
             });
           } else {
-            // Broadcast signal to everyone else
             broadcastToRoom(clientRoomCode, {
               type: 'WEBRTC_SIGNAL',
               payload: {
@@ -558,7 +529,6 @@ wss.on('connection', (ws) => {
           break;
         }
 
-        // --- Voice State Update (VC ON/OFF, Mic Muted, Speaking) ---
         case 'VOICE_STATE': {
           if (!clientRoomCode || !clientPlayerId) return;
           const room = rooms.get(clientRoomCode);
@@ -609,10 +579,10 @@ function handleLeave(ws, roomCode, playerId) {
   }
 
   if (room.players.size === 0) {
+    if (room.timerInterval) clearInterval(room.timerInterval);
     rooms.delete(roomCode);
     console.log(`[jinrou-online] Room #${roomCode} closed (empty).`);
   } else {
-    // Notify peers that WebRTC connection can be closed
     broadcastToRoom(roomCode, {
       type: 'PEER_LEFT',
       payload: { peerId: playerId }
@@ -631,74 +601,214 @@ function handleLeave(ws, roomCode, playerId) {
   }
 }
 
-function handlePhaseAdvance(room) {
+// --- Authoritative Game Timer & State Machine ---
+function startRoomTimer(room) {
+  if (room.timerInterval) clearInterval(room.timerInterval);
+
+  room.timerInterval = setInterval(() => {
+    if (!room.game || room.game.phase === 'game_over') {
+      clearInterval(room.timerInterval);
+      return;
+    }
+
+    room.game.timerSec = (room.game.timerSec || 1) - 1;
+
+    // Send tick every second to keep clocks synchronized
+    broadcastToRoom(room.code, {
+      type: 'TIMER_TICK',
+      payload: { timerSec: room.game.timerSec, phase: room.game.phase }
+    });
+
+    if (room.game.timerSec <= 0) {
+      advanceGamePhase(room);
+    }
+  }, 1000);
+}
+
+// Helper: Check if specific role is alive in room
+function hasAliveRole(room, roleName) {
+  for (const p of room.players.values()) {
+    if (p.isAlive && p.role === roleName) return true;
+  }
+  return false;
+}
+
+// Helper: Determine next night sub-phase (Skip roles not present or dead)
+function getNextNightSubPhase(room, currentPhase) {
+  const order = ['night_guard', 'night_werewolf', 'night_seer', 'night_medium', 'night_archer', 'night_medic'];
+  const startIndex = currentPhase ? order.indexOf(currentPhase) + 1 : 0;
+
+  for (let i = startIndex; i < order.length; i++) {
+    const phaseKey = order[i];
+    if (phaseKey === 'night_guard' && hasAliveRole(room, 'hunter_guard')) return phaseKey;
+    if (phaseKey === 'night_werewolf' && hasAliveRole(room, 'werewolf')) return phaseKey;
+    if (phaseKey === 'night_seer' && hasAliveRole(room, 'seer')) return phaseKey;
+    if (phaseKey === 'night_medium' && hasAliveRole(room, 'medium')) return phaseKey;
+    if (phaseKey === 'night_archer') {
+      const archer = Array.from(room.players.values()).find(p => p.isAlive && p.role === 'archer' && !p.usedArcher);
+      if (archer) return phaseKey;
+    }
+    if (phaseKey === 'night_medic') {
+      const medic = Array.from(room.players.values()).find(p => p.isAlive && p.role === 'medic' && !p.usedMedic);
+      if (medic && room.game.dayCount >= 2) return phaseKey;
+    }
+  }
+  return 'morning_result';
+}
+
+// State Machine transitions
+function advanceGamePhase(room) {
   if (!room || !room.game) return;
   const g = room.game;
-  const players = Array.from(room.players.values());
 
-  if (g.phase === 'night') {
-    // Night resolved: determine attack victim and guard
-    let attackedId = null;
-    let guardedId = null;
+  switch (g.phase) {
+    case 'role_reveal': {
+      // Role reveal ends -> Morning Discussion begins!
+      g.phase = 'morning_discussion';
+      g.phaseTitle = `☀️ ${g.dayCount}日目 朝の話し合い`;
+      g.timerSec = room.discussionTime || 60; // 10s to 90s, default 60s
+      break;
+    }
 
-    for (const [pid, targetInfo] of Object.entries(g.targets)) {
-      if (targetInfo.role === 'werewolf') {
-        attackedId = targetInfo.targetId;
-      } else if (targetInfo.role === 'hunter_guard') {
-        guardedId = targetInfo.targetId;
+    case 'morning_discussion': {
+      // Discussion ends -> Exile Voting begins!
+      g.phase = 'morning_voting';
+      g.phaseTitle = '🗳️ 追放投票タイム（怪しい人を選んでください）';
+      g.timerSec = 25;
+      g.votes = {};
+      break;
+    }
+
+    case 'morning_voting': {
+      // Voting ends -> Tally and Exclude
+      const voteCounts = {};
+      for (const targetId of Object.values(g.votes)) {
+        if (targetId) voteCounts[targetId] = (voteCounts[targetId] || 0) + 1;
       }
-    }
 
-    let victim = null;
-    if (attackedId && attackedId !== guardedId) {
-      victim = room.players.get(attackedId);
-      if (victim) victim.isAlive = false;
-    }
-
-    g.lastVictim = victim ? { id: victim.id, nickname: victim.nickname } : null;
-    g.targets = {};
-    g.phase = 'discussion';
-    g.timerSec = 60;
-
-    checkWinCondition(room);
-  } else if (g.phase === 'discussion') {
-    // Move to voting
-    g.phase = 'voting';
-    g.votes = {};
-    g.timerSec = 30;
-  } else if (g.phase === 'voting') {
-    // Tally votes
-    const voteCounts = {};
-    for (const targetId of Object.values(g.votes)) {
-      if (targetId) voteCounts[targetId] = (voteCounts[targetId] || 0) + 1;
-    }
-
-    let maxVotes = 0;
-    let exiledId = null;
-    for (const [tId, count] of Object.entries(voteCounts)) {
-      if (count > maxVotes) {
-        maxVotes = count;
-        exiledId = tId;
+      let maxVotes = 0;
+      let exiledId = null;
+      for (const [tId, count] of Object.entries(voteCounts)) {
+        if (count > maxVotes) {
+          maxVotes = count;
+          exiledId = tId;
+        }
       }
+
+      const exiled = exiledId ? room.players.get(exiledId) : null;
+      if (exiled) {
+        exiled.isAlive = false;
+        g.lastExiled = { id: exiled.id, nickname: exiled.nickname, role: exiled.role };
+      } else {
+        g.lastExiled = null;
+      }
+
+      g.phase = 'morning_execution';
+      g.phaseTitle = '⚖️ 追放結果の発表';
+      g.timerSec = 8;
+
+      // Special Death Abilities: Mayor (村長)
+      if (exiled && exiled.role === 'mayor') {
+        const traitor = Array.from(room.players.values()).find(p => p.role === 'traitor');
+        if (traitor) {
+          g.revealedTraitor = { id: traitor.id, nickname: traitor.nickname };
+        }
+      }
+
+      // Check Victory Condition immediately after exile!
+      // Requirement:
+      // 1. "人狼を追放できたらその場で村人チームの勝ち"
+      // 2. "市民チームが2人以下しかいなくなったら人狼チームの勝ち"
+      const winResult = checkWinConditions(room);
+      if (winResult) {
+        g.phase = 'game_over';
+        g.winner = winResult.winner;
+        g.winnerTitle = winResult.title;
+        revealAllRoles(room);
+      }
+      break;
     }
 
-    const exiled = exiledId ? room.players.get(exiledId) : null;
-    if (exiled) {
-      exiled.isAlive = false;
+    case 'morning_execution': {
+      // If Hunter (道連れ) was exiled, allow revenge
+      if (g.lastExiled && g.lastExiled.role === 'hunter_avenger' && !g.winner) {
+        g.phase = 'hunter_revenge';
+        g.phaseTitle = '🎯 ハンターの最後の道連れ射撃！';
+        g.timerSec = 15;
+        break;
+      }
+
+      // If game is over, stop
+      if (g.winner) return;
+
+      // Otherwise, transition to Night!
+      g.nightActions = {};
+      const nextNight = getNextNightSubPhase(room, null);
+      setNightSubPhase(room, nextNight);
+      break;
     }
 
-    g.lastExiled = exiled ? { id: exiled.id, nickname: exiled.nickname, role: exiled.role } : null;
-    g.votes = {};
-    g.phase = 'execution';
-    g.timerSec = 10;
+    case 'hunter_revenge': {
+      // Hunter revenge resolved -> Proceed to night or victory check
+      const winResult = checkWinConditions(room);
+      if (winResult) {
+        g.phase = 'game_over';
+        g.winner = winResult.winner;
+        g.winnerTitle = winResult.title;
+        revealAllRoles(room);
+        break;
+      }
+      g.nightActions = {};
+      const nextNight = getNextNightSubPhase(room, null);
+      setNightSubPhase(room, nextNight);
+      break;
+    }
 
-    checkWinCondition(room);
-  } else if (g.phase === 'execution') {
-    if (!g.winner) {
+    // --- Night Turns in specified order: Hunter Guard -> Werewolf -> Seer -> Medium -> Archer -> Medic ---
+    case 'night_guard':
+    case 'night_werewolf':
+    case 'night_seer':
+    case 'night_medium':
+    case 'night_archer':
+    case 'night_medic': {
+      const nextSub = getNextNightSubPhase(room, g.phase);
+      if (nextSub === 'morning_result') {
+        // Resolve Night Actions!
+        resolveNightEvents(room);
+      } else {
+        setNightSubPhase(room, nextSub);
+      }
+      break;
+    }
+
+    case 'morning_result': {
+      // If Hunter died at night, allow revenge
+      if (g.lastVictim && g.lastVictim.role === 'hunter_avenger' && !g.winner) {
+        g.phase = 'hunter_revenge';
+        g.phaseTitle = '🎯 ハンターの道連れ反撃！';
+        g.timerSec = 15;
+        break;
+      }
+
+      // Check Victory Condition!
+      const winResult = checkWinConditions(room);
+      if (winResult) {
+        g.phase = 'game_over';
+        g.winner = winResult.winner;
+        g.winnerTitle = winResult.title;
+        revealAllRoles(room);
+        break;
+      }
+
+      // Next Day Morning Discussion!
       g.dayCount += 1;
-      g.phase = 'night';
-      g.timerSec = 30;
-      g.targets = {};
+      g.phase = 'morning_discussion';
+      g.phaseTitle = `☀️ ${g.dayCount}日目 朝の話し合い`;
+      g.timerSec = room.discussionTime || 60;
+      g.votes = {};
+      g.lastExiled = null;
+      g.lastVictim = null;
+      break;
     }
   }
 
@@ -708,18 +818,230 @@ function handlePhaseAdvance(room) {
   });
 }
 
-function checkWinCondition(room) {
+function setNightSubPhase(room, phaseKey) {
   const g = room.game;
+  g.phase = phaseKey;
+
+  switch (phaseKey) {
+    case 'night_guard':
+      g.phaseTitle = '🛡️ 狩人のターン（守る人を1人選択）';
+      g.timerSec = 15;
+      break;
+    case 'night_werewolf':
+      g.phaseTitle = '🐺 人狼のターン（襲撃する人を1人選択）';
+      g.timerSec = 20;
+      break;
+    case 'night_seer':
+      g.phaseTitle = '🔮 占い師のターン（占う人を1人選択）';
+      g.timerSec = 15;
+      break;
+    case 'night_medium':
+      g.phaseTitle = '🕯️ 霊媒師のターン（追放者の魂と対話）';
+      g.timerSec = 10;
+      // Send medium result to alive medium
+      if (g.lastExiled) {
+        for (const [pid, p] of room.players.entries()) {
+          if (p.isAlive && p.role === 'medium') {
+            sendToPlayer(room.code, pid, {
+              type: 'MEDIUM_RESULT',
+              payload: {
+                exiledNickname: g.lastExiled.nickname,
+                exiledRole: g.lastExiled.role,
+                isWerewolf: g.lastExiled.role === 'werewolf'
+              }
+            });
+          }
+        }
+      }
+      break;
+    case 'night_archer':
+      g.phaseTitle = '🏹 アーチャーのターン（狙撃するか選択）';
+      g.timerSec = 15;
+      break;
+    case 'night_medic':
+      g.phaseTitle = '💉 メディのターン（復活させる味方を選択）';
+      g.timerSec = 15;
+      break;
+  }
+}
+
+// Night Actions Resolution
+function resolveNightEvents(room) {
+  const g = room.game;
+  const actions = g.nightActions || {};
+
+  const guardTargetId = actions.hunter_guard;
+  const werewolfTargetId = actions.werewolf;
+  const archerTargetId = actions.archer;
+  const medicTargetId = actions.medic;
+
+  let victimPlayer = null;
+
+  // 1. Werewolf Attack (Protected if guarded)
+  if (werewolfTargetId && werewolfTargetId !== guardTargetId) {
+    victimPlayer = room.players.get(werewolfTargetId);
+  }
+
+  // 2. Archer shot (Direct kill)
+  if (archerTargetId) {
+    const archerVictim = room.players.get(archerTargetId);
+    if (archerVictim) {
+      archerVictim.isAlive = false;
+      // If werewolf also killed them or someone else, archer shot kills them
+      if (!victimPlayer) victimPlayer = archerVictim;
+    }
+  }
+
+  // 3. Apply Werewolf death
+  if (victimPlayer) {
+    victimPlayer.isAlive = false;
+    g.lastVictim = { id: victimPlayer.id, nickname: victimPlayer.nickname, role: victimPlayer.role };
+  } else {
+    g.lastVictim = null;
+  }
+
+  // 4. Medic Revive
+  if (medicTargetId) {
+    const revivedPlayer = room.players.get(medicTargetId);
+    if (revivedPlayer) {
+      revivedPlayer.isAlive = true;
+      if (g.lastVictim && g.lastVictim.id === medicTargetId) {
+        g.lastVictim = null; // Saved!
+      }
+    }
+  }
+
+  // Mayor killed at night
+  if (victimPlayer && victimPlayer.role === 'mayor') {
+    const traitor = Array.from(room.players.values()).find(p => p.role === 'traitor');
+    if (traitor) {
+      g.revealedTraitor = { id: traitor.id, nickname: traitor.nickname };
+    }
+  }
+
+  g.phase = 'morning_result';
+  g.phaseTitle = '🌅 昨夜の出来事・結果発表';
+  g.timerSec = 8;
+}
+
+// Victory Condition Checker (Strictly follows user rules):
+// 1. "人狼を追放できたらその場で村人チームの勝ち" (All werewolves dead -> Villager team wins!)
+// 2. "市民チームが2人以下しかいなくなったら人狼チームの勝ち" (Citizen team members count <= 2 -> Werewolf team wins!)
+function checkWinConditions(room) {
   const alivePlayers = Array.from(room.players.values()).filter(p => p.isAlive);
   const aliveWolves = alivePlayers.filter(p => p.role === 'werewolf');
-  const aliveHumans = alivePlayers.filter(p => p.role !== 'werewolf');
+  // Citizen team members (roles that belong to villager camp: villager, seer, hunter_guard, medium, mayor, medic, hunter_avenger, archer)
+  const aliveCitizens = alivePlayers.filter(p => p.role !== 'werewolf' && p.role !== 'traitor');
 
+  // Condition 1: All Werewolves eliminated
   if (aliveWolves.length === 0) {
-    g.winner = 'villager';
-    g.phase = 'game_over';
-  } else if (aliveWolves.length >= aliveHumans.length) {
-    g.winner = 'werewolf';
-    g.phase = 'game_over';
+    return {
+      winner: 'villager',
+      title: '🎉 人狼がすべて討ち取られました！村人チームの勝利！'
+    };
+  }
+
+  // Condition 2: Citizen team <= 2 members left
+  if (aliveCitizens.length <= 2) {
+    return {
+      winner: 'werewolf',
+      title: '🐺 市民チームが2人以下になりました！人狼チームの完全勝利！'
+    };
+  }
+
+  return null;
+}
+
+function revealAllRoles(room) {
+  const roles = {};
+  for (const [pid, p] of room.players.entries()) {
+    roles[pid] = {
+      nickname: p.nickname,
+      role: p.role,
+      isAlive: p.isAlive
+    };
+  }
+  room.game.allRolesRevealed = roles;
+}
+
+// Handling player actions
+function handlePlayerGameAction(room, player, action, targetId, ws) {
+  const g = room.game;
+  if (!g) return;
+
+  // 1. Voting
+  if (action === 'CAST_VOTE' && g.phase === 'morning_voting' && player.isAlive) {
+    g.votes[player.id] = targetId;
+    broadcastToRoom(room.code, {
+      type: 'VOTE_RECORDED',
+      payload: { voterId: player.id, totalVotes: Object.keys(g.votes).length }
+    });
+
+    // If all alive players have voted, advance immediately!
+    const aliveCount = Array.from(room.players.values()).filter(p => p.isAlive).length;
+    if (Object.keys(g.votes).length >= aliveCount) {
+      advanceGamePhase(room);
+    }
+  }
+
+  // 2. Hunter Guard Action
+  else if (action === 'GUARD_TARGET' && g.phase === 'night_guard' && player.role === 'hunter_guard' && player.isAlive) {
+    g.nightActions.hunter_guard = targetId;
+    ws.send(JSON.stringify({ type: 'ACTION_CONFIRMED', payload: { action: 'guard', targetId } }));
+    advanceGamePhase(room);
+  }
+
+  // 3. Werewolf Attack Action
+  else if (action === 'WEREWOLF_KILL' && g.phase === 'night_werewolf' && player.role === 'werewolf' && player.isAlive) {
+    g.nightActions.werewolf = targetId;
+    ws.send(JSON.stringify({ type: 'ACTION_CONFIRMED', payload: { action: 'werewolf_kill', targetId } }));
+    advanceGamePhase(room);
+  }
+
+  // 4. Seer Divination Action
+  else if (action === 'SEER_DIVINE' && g.phase === 'night_seer' && player.role === 'seer' && player.isAlive) {
+    const targetPlayer = room.players.get(targetId);
+    const isWolf = targetPlayer && targetPlayer.role === 'werewolf';
+    ws.send(JSON.stringify({
+      type: 'SEER_RESULT',
+      payload: {
+        targetId,
+        targetNickname: targetPlayer ? targetPlayer.nickname : '対象',
+        isWerewolf: isWolf
+      }
+    }));
+    advanceGamePhase(room);
+  }
+
+  // 5. Archer Shot Action
+  else if (action === 'ARCHER_SHOT' && g.phase === 'night_archer' && player.role === 'archer' && player.isAlive && !player.usedArcher) {
+    player.usedArcher = true;
+    g.nightActions.archer = targetId;
+    ws.send(JSON.stringify({ type: 'ACTION_CONFIRMED', payload: { action: 'archer_shot', targetId } }));
+    advanceGamePhase(room);
+  }
+
+  // 6. Medic Revive Action
+  else if (action === 'MEDIC_REVIVE' && g.phase === 'night_medic' && player.role === 'medic' && player.isAlive && !player.usedMedic) {
+    player.usedMedic = true;
+    g.nightActions.medic = targetId;
+    ws.send(JSON.stringify({ type: 'ACTION_CONFIRMED', payload: { action: 'medic_revive', targetId } }));
+    advanceGamePhase(room);
+  }
+
+  // 7. Hunter Avenger Revenge Action (道連れ)
+  else if (action === 'HUNTER_REVENGE' && g.phase === 'hunter_revenge') {
+    const revengeTarget = room.players.get(targetId);
+    if (revengeTarget) {
+      revengeTarget.isAlive = false;
+      g.hunterRevengeTarget = { id: revengeTarget.id, nickname: revengeTarget.nickname, role: revengeTarget.role };
+    }
+    advanceGamePhase(room);
+  }
+
+  // 8. Skip phase button for Host
+  else if (action === 'HOST_SKIP_PHASE' && room.hostId === player.id) {
+    advanceGamePhase(room);
   }
 }
 

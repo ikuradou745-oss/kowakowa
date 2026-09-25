@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
   <style>
-    /* --- Bright / White Modern Design Theme (ユーザー要望: デザインを白色・明るく) --- */
+    /* --- Bright / White Modern Design Theme --- */
     :root {
       --bg-main: #f8fafc;
       --bg-card: #ffffff;
@@ -61,7 +61,6 @@
         linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
     }
 
-    /* Ambient Sun/Moon Light Silhouette */
     .ambient-bg {
       position: fixed;
       top: 0;
@@ -86,7 +85,6 @@
       filter: blur(4px);
     }
 
-    /* Main App Container */
     #app {
       position: relative;
       width: 100%;
@@ -103,7 +101,7 @@
       align-items: center;
       padding: 16px 24px;
       width: 100%;
-      background: rgba(255, 255, 255, 0.85);
+      background: rgba(255, 255, 255, 0.9);
       border-bottom: 1px solid var(--border-color);
       backdrop-filter: blur(12px);
       box-shadow: var(--shadow-sm);
@@ -119,7 +117,6 @@
       font-weight: 900;
       letter-spacing: 0.08em;
       color: var(--text-main);
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     }
 
     .brand-logo .wolf-icon {
@@ -133,7 +130,6 @@
       gap: 10px;
     }
 
-    /* Chips (Coins, Nickname, Settings) */
     .coins-chip {
       display: flex;
       align-items: center;
@@ -152,7 +148,6 @@
 
     .coins-chip:hover {
       background: #fde68a;
-      border-color: rgba(217, 119, 6, 0.6);
       transform: translateY(-1px);
     }
 
@@ -176,21 +171,11 @@
     }
 
     .nickname-chip:hover {
-      border-color: var(--border-strong);
       background: var(--bg-card-subtle);
     }
 
-    .nickname-chip .user-icon {
-      color: var(--sky);
-      font-size: 1rem;
-    }
-
-    .nickname-chip .nick-text {
-      max-width: 110px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
+    .nickname-chip .user-icon { color: var(--sky); font-size: 1rem; }
+    .nickname-chip .nick-text { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     .btn-settings {
       display: flex;
@@ -205,17 +190,15 @@
       border-radius: 9999px;
       cursor: pointer;
       box-shadow: var(--shadow-sm);
-      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: all 0.2s;
     }
 
     .btn-settings:hover {
       background: var(--bg-card-subtle);
-      border-color: var(--border-strong);
       color: var(--text-main);
-      transform: translateY(-1px);
     }
 
-    /* --- Top-Left Chat Overlay (ユーザー要望: 左上にチャット、最大20文字) --- */
+    /* Top-Left Chat Container (ユーザー指定: 最大20文字、ユーザー名: チャット内容) */
     .top-left-chat-container {
       position: fixed;
       top: 76px;
@@ -229,7 +212,7 @@
       backdrop-filter: blur(14px);
       z-index: 100;
       overflow: hidden;
-      display: none; /* Shown when inside a room */
+      display: none;
       transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
@@ -254,15 +237,8 @@
       font-weight: 700;
     }
 
-    .chat-mode-badge.vc-on {
-      background: var(--emerald-light);
-      color: var(--emerald);
-    }
-
-    .chat-mode-badge.vc-off {
-      background: var(--sky-light);
-      color: var(--sky);
-    }
+    .chat-mode-badge.vc-on { background: var(--emerald-light); color: var(--emerald); }
+    .chat-mode-badge.vc-off { background: var(--sky-light); color: var(--sky); }
 
     .btn-chat-toggle {
       background: transparent;
@@ -273,10 +249,7 @@
       padding: 2px 6px;
       border-radius: 4px;
     }
-    .btn-chat-toggle:hover {
-      background: #e2e8f0;
-      color: var(--text-main);
-    }
+    .btn-chat-toggle:hover { background: #e2e8f0; color: var(--text-main); }
 
     .chat-messages-box {
       height: 140px;
@@ -303,13 +276,8 @@
       white-space: nowrap;
     }
 
-    .chat-sender-name.is-me {
-      color: var(--sky);
-    }
-
-    .chat-sender-name.is-system {
-      color: var(--emerald);
-    }
+    .chat-sender-name.is-me { color: var(--sky); }
+    .chat-sender-name.is-system { color: var(--emerald); }
 
     .chat-content-text {
       color: var(--text-main);
@@ -325,10 +293,7 @@
       align-items: center;
     }
 
-    .chat-input-wrapper {
-      position: relative;
-      flex: 1;
-    }
+    .chat-input-wrapper { position: relative; flex: 1; }
 
     .chat-text-input {
       width: 100%;
@@ -339,12 +304,8 @@
       color: var(--text-main);
       background: #ffffff;
       outline: none;
-      transition: border-color 0.2s;
     }
-
-    .chat-text-input:focus {
-      border-color: var(--sky);
-    }
+    .chat-text-input:focus { border-color: var(--sky); }
 
     .chat-counter {
       position: absolute;
@@ -366,14 +327,10 @@
       font-size: 0.8rem;
       font-weight: 700;
       cursor: pointer;
-      transition: background 0.2s;
     }
+    .btn-chat-send:hover { background: #0369a1; }
 
-    .btn-chat-send:hover {
-      background: #0369a1;
-    }
-
-    /* --- Floating Room Voice Control Bar --- */
+    /* In-Room Voice Bar */
     .room-voice-bar {
       display: flex;
       align-items: center;
@@ -440,9 +397,7 @@
       z-index: 10;
     }
 
-    .game-hero {
-      margin-bottom: 36px;
-    }
+    .game-hero { margin-bottom: 36px; }
 
     .game-main-title {
       font-family: 'Cinzel', 'Noto Sans JP', serif;
@@ -463,7 +418,6 @@
       text-transform: uppercase;
     }
 
-    /* 3 Main Action Buttons */
     .main-actions-container {
       display: flex;
       flex-direction: column;
@@ -492,10 +446,6 @@
       box-shadow: var(--shadow-lg);
     }
 
-    .btn-main-action:active {
-      transform: translateY(1px);
-    }
-
     .btn-online-play {
       background: linear-gradient(135deg, #e11d48 0%, #be123c 100%);
       color: #ffffff;
@@ -507,28 +457,13 @@
       box-shadow: 0 10px 24px -4px rgba(225, 29, 72, 0.35);
     }
 
-    .btn-role-guide {
-      background: #ffffff;
-      color: var(--text-main);
-    }
+    .btn-role-guide { background: #ffffff; color: var(--text-main); }
+    .btn-role-guide:hover { background: var(--bg-card-subtle); border-color: var(--border-strong); }
 
-    .btn-role-guide:hover {
-      background: var(--bg-card-subtle);
-      border-color: var(--border-strong);
-    }
+    .btn-shop { background: #ffffff; color: var(--gold); border-color: rgba(217, 119, 6, 0.3); }
+    .btn-shop:hover { background: var(--gold-light); border-color: rgba(217, 119, 6, 0.5); }
 
-    .btn-shop {
-      background: #ffffff;
-      color: var(--gold);
-      border-color: rgba(217, 119, 6, 0.3);
-    }
-
-    .btn-shop:hover {
-      background: var(--gold-light);
-      border-color: rgba(217, 119, 6, 0.5);
-    }
-
-    /* Generic Modal Styling (Clean White & High Contrast) */
+    /* Modals */
     .modal-overlay {
       position: fixed;
       top: 0;
@@ -547,10 +482,7 @@
       transition: opacity 0.22s ease;
     }
 
-    .modal-overlay.active {
-      opacity: 1;
-      pointer-events: auto;
-    }
+    .modal-overlay.active { opacity: 1; pointer-events: auto; }
 
     .modal-card {
       background: #ffffff;
@@ -558,7 +490,7 @@
       border-radius: 24px;
       box-shadow: var(--shadow-xl);
       width: 100%;
-      max-width: 500px;
+      max-width: 520px;
       max-height: 90vh;
       overflow-y: auto;
       padding: 26px 24px;
@@ -566,9 +498,7 @@
       transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    .modal-overlay.active .modal-card {
-      transform: scale(1) translateY(0);
-    }
+    .modal-overlay.active .modal-card { transform: scale(1) translateY(0); }
 
     .modal-header {
       display: flex;
@@ -577,11 +507,7 @@
       margin-bottom: 18px;
     }
 
-    .modal-title {
-      font-size: 1.25rem;
-      font-weight: 800;
-      color: var(--text-main);
-    }
+    .modal-title { font-size: 1.25rem; font-weight: 800; color: var(--text-main); }
 
     .btn-modal-close {
       background: #f1f5f9;
@@ -595,18 +521,10 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: all 0.2s;
     }
+    .btn-modal-close:hover { background: #e2e8f0; color: var(--text-main); }
 
-    .btn-modal-close:hover {
-      background: #e2e8f0;
-      color: var(--text-main);
-    }
-
-    .form-group {
-      margin-bottom: 20px;
-      text-align: left;
-    }
+    .form-group { margin-bottom: 20px; text-align: left; }
 
     .form-label {
       display: block;
@@ -616,15 +534,8 @@
       margin-bottom: 6px;
     }
 
-    .form-label-desc {
-      font-size: 0.78rem;
-      color: var(--text-muted);
-      font-weight: 500;
-    }
-
-    .input-wrapper {
-      position: relative;
-    }
+    .form-label-desc { font-size: 0.78rem; color: var(--text-muted); font-weight: 500; }
+    .input-wrapper { position: relative; }
 
     .text-input {
       width: 100%;
@@ -636,13 +547,8 @@
       font-size: 0.95rem;
       font-weight: 600;
       outline: none;
-      transition: border-color 0.2s, box-shadow 0.2s;
     }
-
-    .text-input:focus {
-      border-color: var(--sky);
-      box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12);
-    }
+    .text-input:focus { border-color: var(--sky); box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12); }
 
     .char-counter {
       position: absolute;
@@ -654,22 +560,10 @@
       font-weight: 700;
     }
 
-    .input-error-msg {
-      font-size: 0.78rem;
-      color: var(--crimson);
-      margin-top: 6px;
-      display: none;
-    }
+    .input-error-msg { font-size: 0.78rem; color: var(--crimson); margin-top: 6px; display: none; }
+    .input-error-msg.visible { display: block; }
 
-    .input-error-msg.visible {
-      display: block;
-    }
-
-    .modal-actions-bar {
-      display: flex;
-      gap: 10px;
-      margin-top: 20px;
-    }
+    .modal-actions-bar { display: flex; gap: 10px; margin-top: 20px; }
 
     .btn-primary {
       flex: 1;
@@ -684,17 +578,8 @@
       box-shadow: var(--shadow-sm);
       transition: all 0.2s;
     }
-
-    .btn-primary:hover:not(:disabled) {
-      background: var(--crimson-hover);
-      box-shadow: var(--shadow-md);
-    }
-
-    .btn-primary:disabled {
-      opacity: 0.55;
-      cursor: not-allowed;
-      background: #94a3b8;
-    }
+    .btn-primary:hover:not(:disabled) { background: var(--crimson-hover); box-shadow: var(--shadow-md); }
+    .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; background: #94a3b8; }
 
     .btn-secondary {
       padding: 12px 20px;
@@ -707,13 +592,8 @@
       cursor: pointer;
       transition: all 0.2s;
     }
+    .btn-secondary:hover { background: #e2e8f0; color: var(--text-main); }
 
-    .btn-secondary:hover {
-      background: #e2e8f0;
-      color: var(--text-main);
-    }
-
-    /* Range Slider */
     .range-slider {
       width: 100%;
       height: 8px;
@@ -722,9 +602,8 @@
       outline: none;
       -webkit-appearance: none;
       cursor: pointer;
-      margin: 12px 0;
+      margin: 10px 0;
     }
-
     .range-slider::-webkit-slider-thumb {
       -webkit-appearance: none;
       width: 22px;
@@ -735,14 +614,7 @@
       cursor: pointer;
     }
 
-    /* VC Volume presets */
-    .preset-pills {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 10px;
-    }
-
+    .preset-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
     .preset-pill {
       background: #f1f5f9;
       border: 1px solid var(--border-color);
@@ -754,21 +626,97 @@
       cursor: pointer;
       transition: all 0.2s;
     }
-
     .preset-pill.active, .preset-pill:hover {
       background: var(--sky-light);
       border-color: rgba(2, 132, 199, 0.4);
       color: var(--sky);
     }
 
-    /* Online Play Options Grid */
-    .online-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px;
-      margin-bottom: 16px;
+    /* Mode Tab Buttons */
+    .btn-mode-tab {
+      flex: 1;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1.5px solid var(--border-color);
+      background: #ffffff;
+      color: var(--text-sub);
+      font-weight: 800;
+      font-size: 0.88rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-mode-tab.active {
+      border-color: var(--crimson);
+      background: var(--crimson-light);
+      color: var(--crimson);
     }
 
+    .roles-preset-preview {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .role-preview-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 4px 10px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .role-stepper-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #f8fafc;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 8px 12px;
+      margin-bottom: 6px;
+    }
+
+    .role-stepper-ctrl {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-stepper {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background: #ffffff;
+      font-weight: 900;
+      font-size: 1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-stepper:hover { background: #e2e8f0; }
+
+    .stepper-count { font-weight: 900; min-width: 20px; text-align: center; }
+
+    .ratio-indicator-box {
+      margin-top: 8px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+    .ratio-indicator-box.valid { background: var(--emerald-light); color: var(--emerald); border: 1px solid rgba(5, 150, 105, 0.3); }
+    .ratio-indicator-box.invalid { background: var(--crimson-light); color: var(--crimson); border: 1px solid rgba(225, 29, 72, 0.3); }
+
+    /* Online Play Hub */
+    .online-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
     .online-action-box {
       background: #ffffff;
       border: 1.5px solid var(--border-color);
@@ -779,36 +727,16 @@
       box-shadow: var(--shadow-sm);
       transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
-
     .online-action-box:hover {
       border-color: var(--crimson);
       background: var(--crimson-light);
       transform: translateY(-2px);
       box-shadow: var(--shadow-md);
     }
+    .online-action-box .box-icon { font-size: 2.2rem; margin-bottom: 8px; display: block; }
+    .online-action-box .box-title { font-size: 1rem; font-weight: 800; color: var(--text-main); display: block; margin-bottom: 4px; }
+    .online-action-box .box-desc { font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; display: block; }
 
-    .online-action-box .box-icon {
-      font-size: 2.2rem;
-      margin-bottom: 8px;
-      display: block;
-    }
-
-    .online-action-box .box-title {
-      font-size: 1rem;
-      font-weight: 800;
-      color: var(--text-main);
-      display: block;
-      margin-bottom: 4px;
-    }
-
-    .online-action-box .box-desc {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      line-height: 1.4;
-      display: block;
-    }
-
-    /* Room Waiting Lobby */
     .room-code-badge {
       display: inline-flex;
       align-items: center;
@@ -834,17 +762,8 @@
       color: var(--text-sub);
       cursor: pointer;
     }
-    .btn-copy-code:hover { background: #e2e8f0; }
 
-    .lobby-roster {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      max-height: 220px;
-      overflow-y: auto;
-      margin-bottom: 16px;
-    }
-
+    .lobby-roster { display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto; margin-bottom: 16px; }
     .lobby-player-item {
       display: flex;
       justify-content: space-between;
@@ -854,24 +773,9 @@
       border-radius: 12px;
       padding: 8px 14px;
     }
+    .lobby-player-info { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 0.9rem; }
+    .lobby-player-voice-status { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--text-muted); }
 
-    .lobby-player-info {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-weight: 700;
-      font-size: 0.9rem;
-    }
-
-    .lobby-player-voice-status {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.75rem;
-      color: var(--text-muted);
-    }
-
-    /* Requirement: Minimum 3 players required */
     .min-player-warning {
       background: #fffbeb;
       border: 1px solid #fde68a;
@@ -886,7 +790,6 @@
       gap: 6px;
     }
 
-    /* Invite Link Box */
     .lobby-invite-card {
       background: #f8fafc;
       border: 1px solid var(--border-color);
@@ -895,7 +798,6 @@
       text-align: left;
       margin-bottom: 14px;
     }
-
     .invite-text-box {
       background: #ffffff;
       border: 1px solid var(--border-color);
@@ -908,16 +810,7 @@
       margin: 6px 0;
     }
 
-    /* Roles Guide & Shop lists */
-    .roles-list, .shop-items-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      max-height: 50vh;
-      overflow-y: auto;
-      padding-right: 4px;
-    }
-
+    .roles-list, .shop-items-list { display: flex; flex-direction: column; gap: 10px; max-height: 50vh; overflow-y: auto; padding-right: 4px; }
     .role-card, .shop-item-card {
       background: #ffffff;
       border: 1px solid var(--border-color);
@@ -926,20 +819,8 @@
       text-align: left;
       box-shadow: var(--shadow-sm);
     }
-
-    .role-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 6px;
-    }
-
-    .role-badge {
-      padding: 3px 8px;
-      border-radius: 9999px;
-      font-size: 0.72rem;
-      font-weight: 800;
-    }
+    .role-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .role-badge { padding: 3px 8px; border-radius: 9999px; font-size: 0.72rem; font-weight: 800; }
     .role-badge.villager { background: var(--sky-light); color: var(--villager-color); }
     .role-badge.werewolf { background: var(--crimson-light); color: var(--werewolf-color); }
 
@@ -974,22 +855,11 @@
       border-radius: 9999px;
       font-weight: 800;
       font-size: 0.9rem;
+      box-shadow: var(--shadow-sm);
     }
-
-    .game-phase-badge.night {
-      background: #1e1b4b;
-      color: #a5b4fc;
-    }
-
-    .game-phase-badge.day {
-      background: #fef3c7;
-      color: #b45309;
-    }
-
-    .game-phase-badge.voting {
-      background: #ffe4e6;
-      color: #be123c;
-    }
+    .game-phase-badge.night { background: #1e1b4b; color: #a5b4fc; }
+    .game-phase-badge.day { background: #fef3c7; color: #b45309; }
+    .game-phase-badge.voting { background: #ffe4e6; color: #be123c; }
 
     .game-board {
       flex: 1;
@@ -998,8 +868,26 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      gap: 16px;
+      justify-content: flex-start;
+      gap: 14px;
+    }
+
+    /* Dramatic Cutscene / Announcement Banner */
+    .game-cutscene-banner {
+      width: 100%;
+      max-width: 680px;
+      background: #ffffff;
+      border: 2px solid var(--border-color);
+      border-radius: 16px;
+      padding: 14px 18px;
+      box-shadow: var(--shadow-md);
+      text-align: center;
+      animation: fadeInScale 0.3s ease;
+    }
+
+    @keyframes fadeInScale {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
     }
 
     .my-secret-role-card {
@@ -1008,7 +896,7 @@
       border-radius: 18px;
       padding: 16px 20px;
       width: 100%;
-      max-width: 440px;
+      max-width: 500px;
       box-shadow: var(--shadow-md);
       text-align: left;
     }
@@ -1030,36 +918,36 @@
       box-shadow: var(--shadow-sm);
       transition: all 0.2s;
     }
-
-    .game-player-card.is-dead {
-      opacity: 0.45;
-      background: #f1f5f9;
-      filter: grayscale(1);
-    }
-
-    .game-player-card.speaking {
-      border-color: #22c55e;
-      box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
-    }
+    .game-player-card.is-dead { opacity: 0.45; background: #f1f5f9; filter: grayscale(1); }
+    .game-player-card.speaking { border-color: #22c55e; box-shadow: 0 0 12px rgba(34, 197, 94, 0.4); }
 
     .btn-target-select {
       margin-top: 6px;
-      padding: 4px 8px;
-      font-size: 0.75rem;
-      font-weight: 700;
-      border-radius: 6px;
-      border: 1px solid var(--border-color);
-      background: #f8fafc;
-      cursor: pointer;
-      width: 100%;
-    }
-    .btn-target-select:hover {
+      padding: 6px 10px;
+      font-size: 0.8rem;
+      font-weight: 800;
+      border-radius: 8px;
+      border: 1px solid var(--crimson);
       background: var(--crimson-light);
       color: var(--crimson);
-      border-color: var(--crimson);
+      cursor: pointer;
+      width: 100%;
+      transition: all 0.15s;
+    }
+    .btn-target-select:hover { background: var(--crimson); color: #ffffff; }
+
+    /* Initial Role Reveal Announcement Modal */
+    .role-reveal-card {
+      background: #ffffff;
+      border: 3px solid var(--crimson);
+      border-radius: 24px;
+      padding: 24px;
+      max-width: 440px;
+      width: 100%;
+      text-align: center;
+      box-shadow: var(--shadow-xl);
     }
 
-    /* Toast Notification */
     .toast-msg {
       position: fixed;
       bottom: 24px;
@@ -1077,11 +965,7 @@
       pointer-events: none;
       transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
-
-    .toast-msg.show {
-      transform: translateX(-50%) translateY(0);
-      opacity: 1;
-    }
+    .toast-msg.show { transform: translateX(-50%) translateY(0); opacity: 1; }
   </style>
 </head>
 <body>
@@ -1091,7 +975,7 @@
     <div class="moon-silhouette"></div>
   </div>
 
-  <!-- Top-Left Chat Container (ユーザー指定: 左上にチャット、最大20文字、ユーザー名：チャットの内容) -->
+  <!-- Top-Left Chat Container (ユーザー指定: 左上にチャット、最大20文字、ユーザー名: チャット内容) -->
   <div class="top-left-chat-container" id="topLeftChatContainer">
     <div class="chat-header">
       <div class="chat-mode-badge vc-on" id="chatModeBadge">
@@ -1139,20 +1023,17 @@
       </div>
 
       <div class="top-right-bar">
-        <!-- Shop Coins Chip -->
         <div class="coins-chip" id="topCoinsChip" title="役職ショップを開く">
           <span class="coin-icon">🪙</span>
           <span id="topCoinsDisplay">0</span>
           <span class="coin-unit">C</span>
         </div>
 
-        <!-- Nickname Chip -->
         <div class="nickname-chip" id="topNicknameChip" title="あなたのニックネーム">
           <span class="user-icon">👤</span>
           <span class="nick-text" id="topNicknameText">ゲスト</span>
         </div>
 
-        <!-- Settings Button -->
         <button class="btn-settings" id="btnOpenSettings" aria-label="設定">
           <span>⚙️</span>
           <span>設定</span>
@@ -1168,19 +1049,16 @@
       </div>
 
       <div class="main-actions-container">
-        <!-- 1. オンラインプレイ -->
         <button class="btn-main-action btn-online-play" id="btnOnlinePlay">
           <span>⚔️</span>
           <span>オンラインプレイ</span>
         </button>
 
-        <!-- 2. 役職確認 -->
         <button class="btn-main-action btn-role-guide" id="btnRoleGuide">
           <span>📜</span>
           <span>役職確認</span>
         </button>
 
-        <!-- 3. ショップ (役職解放) -->
         <button class="btn-main-action btn-shop" id="btnOpenShop">
           <span>🛍️</span>
           <span>役職ショップ</span>
@@ -1227,7 +1105,7 @@
     </div>
   </div>
 
-  <!-- 2. Settings Modal (VC ON/OFF, Mic ON/OFF, Volume 50%~500%, Nickname) -->
+  <!-- 2. Settings Modal -->
   <div class="modal-overlay" id="settingsModal">
     <div class="modal-card">
       <div class="modal-header">
@@ -1235,7 +1113,6 @@
         <button class="btn-modal-close" id="btnCloseSettings" aria-label="閉じる">✕</button>
       </div>
 
-      <!-- Setting 1: Change Nickname -->
       <div class="form-group">
         <label class="form-label" for="settingsNicknameInput">
           ニックネームの変更
@@ -1260,7 +1137,6 @@
         </button>
       </div>
 
-      <!-- Setting 2: VC Enable/Disable (User request: default ON, togglable in settings) -->
       <div class="form-group">
         <label class="form-label">
           ボイスチャット (VC) 機能
@@ -1274,16 +1150,10 @@
             🔇 VC: OFF (チャットモード)
           </button>
         </div>
-        <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px;">
-          ※ OFFにすると音声通話を停止し、画面左上のテキストチャットで会話します。
-        </div>
       </div>
 
-      <!-- Setting 3: Mic ON/OFF -->
       <div class="form-group">
-        <label class="form-label">
-          マイクの状態
-        </label>
+        <label class="form-label">マイクの状態</label>
         <div style="display: flex; gap: 8px; margin-top: 6px;">
           <button class="btn-secondary" id="btnSettingsMicOn" style="flex: 1; font-weight: 800;">
             🎙️ マイク ON
@@ -1294,7 +1164,6 @@
         </div>
       </div>
 
-      <!-- Setting 4: VC Volume Control (50% ~ 500%) -->
       <div class="form-group" style="margin-bottom: 12px;">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <label class="form-label" style="margin-bottom: 0;">
@@ -1354,9 +1223,7 @@
         <button class="preset-pill" id="tabRoleShop" data-camp="shop">ショップ開放役職</button>
       </div>
 
-      <div class="roles-list" id="rolesList">
-        <!-- Rendered via JS -->
-      </div>
+      <div class="roles-list" id="rolesList"></div>
 
       <div class="modal-actions-bar">
         <button class="btn-secondary" id="btnFinishRoleGuide" style="width: 100%;">閉じる</button>
@@ -1379,9 +1246,7 @@
         </div>
       </div>
 
-      <div class="shop-items-list" id="shopItemsList">
-        <!-- Rendered via JS -->
-      </div>
+      <div class="shop-items-list" id="shopItemsList"></div>
 
       <div class="modal-actions-bar">
         <button class="btn-secondary" id="btnFinishShop" style="width: 100%;">閉じる</button>
@@ -1397,7 +1262,7 @@
         <button class="btn-modal-close" id="btnCloseOnlinePlay" aria-label="閉じる">✕</button>
       </div>
 
-      <!-- View A: Selection (Create Room / Join Room) -->
+      <!-- View A: Selection -->
       <div id="onlineHubView">
         <p style="font-size: 0.88rem; color: var(--text-sub); margin-bottom: 16px; line-height: 1.5;">
           友達と部屋コードを共有して人狼をプレイできます。<br>
@@ -1408,7 +1273,7 @@
           <div class="online-action-box" id="btnCardCreateRoom">
             <span class="box-icon">🏠</span>
             <span class="box-title">部屋を作成</span>
-            <span class="box-desc">部屋を開設して待機室へ</span>
+            <span class="box-desc">人数や役職構成を設定して部屋を開設</span>
           </div>
 
           <div class="online-action-box" id="btnCardShowJoinInput">
@@ -1418,7 +1283,6 @@
           </div>
         </div>
 
-        <!-- Join Form -->
         <div id="joinRoomForm" style="display: none; background: #f8fafc; border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; margin-top: 10px;">
           <label class="form-label" for="roomCodeInput">4桁の部屋コード</label>
           <div style="display: flex; gap: 8px;">
@@ -1438,10 +1302,12 @@
         </div>
       </div>
 
-      <!-- View B: Create Room Settings -->
+      <!-- View B: Create Room Settings (ユーザー要望: 配役ノーマル/カスタム切替、役職表示、話し合い時間10~90秒) -->
       <div id="onlineCreateRoomView" style="display: none;">
+        
+        <!-- 1. 参加定員人数 (3人〜12人) -->
         <div class="form-group">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
             <label class="form-label" style="margin-bottom: 0;">👥 参加定員人数</label>
             <span id="playerCountDisplay" style="color: var(--crimson); font-size: 1.1rem; font-weight: 900;">5人</span>
           </div>
@@ -1461,16 +1327,62 @@
           </div>
         </div>
 
-        <!-- Mode selection -->
+        <!-- 2. 朝の話し合い時間 (ユーザー要望: 10秒〜90秒まで変更可能、初期値1分) -->
         <div class="form-group">
-          <label class="form-label">配役モード</label>
-          <div style="display: flex; gap: 8px;">
-            <button class="btn-secondary" id="btnModeNormal" style="flex: 1; border-color: var(--crimson); color: var(--crimson); font-weight: 800;">
-              🌟 ノーマル (自動バランス)
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <label class="form-label" style="margin-bottom: 0;">⏳ 朝の話し合い時間</label>
+            <span id="discussionTimeDisplay" style="color: var(--sky); font-size: 1.05rem; font-weight: 900;">60秒 (1分)</span>
+          </div>
+          <input 
+            type="range" 
+            id="roomDiscussionTimeSlider" 
+            class="range-slider" 
+            min="10" 
+            max="90" 
+            step="5" 
+            value="60" 
+          />
+          <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-top: -4px;">
+            <span>最短 10秒</span>
+            <span>標準 60秒 (1分)</span>
+            <span>最長 90秒</span>
+          </div>
+        </div>
+
+        <!-- 3. 配役モード切替 (ノーマル / カスタム) -->
+        <div class="form-group">
+          <label class="form-label">🎭 入れる役職の設定</label>
+          <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+            <button class="btn-mode-tab active" id="btnModeNormal" type="button">
+              <span>🌟 ノーマル (自動配役)</span>
             </button>
-            <button class="btn-secondary" id="btnModeOriginal" style="flex: 1; font-weight: 800;">
-              🛠️ カスタム
+            <button class="btn-mode-tab" id="btnModeOriginal" type="button">
+              <span>🛠️ カスタム (自由設定)</span>
             </button>
+          </div>
+
+          <!-- Normal Mode Roles Preview -->
+          <div id="normalModeContainer">
+            <p style="font-size: 0.8rem; color: var(--text-sub); margin-bottom: 6px;">
+              定員人数に合わせて最適な役職構成が自動編成されます：
+            </p>
+            <div class="roles-preset-preview" id="normalRolesPreviewList">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- Custom Mode Roles Steppers -->
+          <div id="originalModeContainer" style="display: none;">
+            <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 8px;">
+              ※ 人狼チームと市民チームの比率が約 <strong>2 : 8</strong> になるように調整してください。
+            </p>
+            <div id="originalRolesSteppersList" style="max-height: 220px; overflow-y: auto; padding-right: 4px;">
+              <!-- Dynamically populated -->
+            </div>
+            <div class="ratio-indicator-box valid" id="originalValidationBox">
+              <div id="originalTotalCountNotice">合計役職数: 5 / 5人</div>
+              <div id="originalRatioNotice" style="font-size: 0.75rem; margin-top: 2px;">陣営バランス: 人狼陣営 1人 : 市民陣営 4人</div>
+            </div>
           </div>
         </div>
 
@@ -1482,7 +1394,7 @@
         </div>
       </div>
 
-      <!-- View C: Room Waiting Lobby (ユーザー要望: 待機中の時点でVC可能、最低3人いないとはじめられない) -->
+      <!-- View C: Room Waiting Lobby -->
       <div id="onlineLobbyView" style="display: none; text-align: center;">
         
         <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 2px;">4桁の部屋コード</div>
@@ -1505,13 +1417,11 @@
           <span style="font-size: 0.75rem; color: var(--text-muted); margin-left: auto;">待機中通話中</span>
         </div>
 
-        <!-- Minimum 3 players required indicator -->
         <div class="min-player-warning" id="lobbyMinPlayerWarning">
           <span>⚠️</span>
           <span id="lobbyMinPlayerNoticeText">ゲームを開始するには最低3人のプレイヤーが必要です（現在: 1/3人）</span>
         </div>
 
-        <!-- Invitation Box -->
         <div class="lobby-invite-card">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
             <span style="font-size: 0.85rem; font-weight: 800; color: var(--text-main);">📢 友達を招待</span>
@@ -1524,16 +1434,12 @@
           </button>
         </div>
 
-        <!-- Participants List -->
         <div style="text-align: left; margin-bottom: 6px; font-size: 0.85rem; font-weight: 700; color: var(--text-sub);">
           参加プレイヤー (<span id="lobbyPlayerCount">1</span> / <span id="lobbyPlayerMax">5</span>人 - 最低3人必要):
         </div>
-        <div class="lobby-roster" id="lobbyPlayerRoster">
-          <!-- Injected via JS -->
-        </div>
+        <div class="lobby-roster" id="lobbyPlayerRoster"></div>
 
         <div class="modal-actions-bar">
-          <!-- Start Button: Disabled when < 3 players -->
           <button class="btn-primary" id="btnLobbyStartGame" disabled style="display: none;">
             最低3人必要 (現在: 1/3人)
           </button>
@@ -1544,7 +1450,32 @@
     </div>
   </div>
 
-  <!-- 6. In-Game Screen (人狼ゲーム画面) -->
+  <!-- 6. Role Announcement Modal (ユーザー要望: 最初は自分の役職が言い渡され、その後に試合スタート) -->
+  <div class="modal-overlay" id="roleAnnouncementModal">
+    <div class="role-reveal-card" id="roleRevealCard">
+      <div style="font-size: 0.85rem; font-weight: 800; color: var(--text-muted); margin-bottom: 4px;">
+        🐺 あなたに与えられた役職
+      </div>
+      <div style="font-size: 3.2rem; margin: 10px 0;" id="revealRoleIcon">🧑‍🌾</div>
+      <div style="font-size: 1.8rem; font-weight: 900; color: var(--text-main); margin-bottom: 4px;" id="revealRoleName">
+        村人
+      </div>
+      <div class="role-badge villager" id="revealRoleBadge" style="display: inline-block; font-size: 0.85rem; padding: 4px 12px; margin-bottom: 12px;">
+        村人チーム
+      </div>
+      <p style="font-size: 0.88rem; color: var(--text-sub); line-height: 1.6; margin-bottom: 14px;" id="revealRoleDesc">
+        村人チーム。特殊能力はありませんが、昼の議論と投票で人狼を見つけ出し追放を目指します。
+      </p>
+      <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: 12px; padding: 10px 14px; font-size: 0.8rem; color: var(--text-sub); margin-bottom: 18px; text-align: left;">
+        <strong>勝利条件:</strong> <span id="revealRoleWinCondition">すべての人狼を追放する</span>
+      </div>
+      <button class="btn-primary" id="btnConfirmMyRole" style="width: 100%; padding: 14px; font-size: 1.05rem;">
+        役職を確認しました (試合開始)
+      </button>
+    </div>
+  </div>
+
+  <!-- 7. In-Game Screen (人狼ゲーム本編画面: 朝の話し合い・追放投票・夜の行動サイクル) -->
   <div id="gameView">
     <div class="game-top-bar">
       <div style="display: flex; align-items: center; gap: 10px;">
@@ -1552,12 +1483,11 @@
         <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted);" id="gameDayCountText">1日目</span>
       </div>
 
-      <div class="game-phase-badge night" id="gamePhaseBadge">
-        <span id="gamePhaseIcon">🌙</span>
-        <span id="gamePhaseText">夜の行動 (残り30秒)</span>
+      <div class="game-phase-badge day" id="gamePhaseBadge">
+        <span id="gamePhaseIcon">☀️</span>
+        <span id="gamePhaseText">朝の話し合い (残り60秒)</span>
       </div>
 
-      <!-- Quick Game Voice Controls -->
       <div style="display: flex; gap: 6px; align-items: center;">
         <button class="btn-voice-toggle active" id="btnGameVcToggle" style="padding: 4px 8px; font-size: 0.78rem;">
           <span id="gameVcLabel">🔊 VC: ON</span>
@@ -1569,17 +1499,28 @@
     </div>
 
     <div class="game-board">
-      <!-- Secret Role Card for Local Player -->
+      
+      <!-- Dramatic Cutscene / Announcement Banner -->
+      <div class="game-cutscene-banner" id="gameCutsceneBanner">
+        <div style="font-size: 1.3rem; font-weight: 900; color: var(--text-main); margin-bottom: 4px;" id="cutsceneTitle">
+          ☀️ 朝が来ました
+        </div>
+        <div style="font-size: 0.88rem; color: var(--text-sub); line-height: 1.5;" id="cutsceneBody">
+          話し合いをして怪しい人物を探し出しましょう。
+        </div>
+      </div>
+
+      <!-- Secret Role Card -->
       <div class="my-secret-role-card" id="mySecretRoleCard">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
           <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-muted);">あなたの役職</span>
           <span class="role-badge villager" id="myRoleCampBadge">村人チーム</span>
         </div>
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
           <span style="font-size: 2rem;" id="myRoleIcon">🧑‍🌾</span>
           <div>
-            <div style="font-size: 1.2rem; font-weight: 900;" id="myRoleName">村人</div>
-            <div style="font-size: 0.75rem; color: var(--text-muted);" id="myRoleDesc">夜の行動はありません。昼の議論と投票で人狼を探し出してください。</div>
+            <div style="font-size: 1.15rem; font-weight: 900;" id="myRoleName">村人</div>
+            <div style="font-size: 0.78rem; color: var(--text-muted);" id="myRoleDesc">昼の議論と投票で人狼を探し出してください。</div>
           </div>
         </div>
       </div>
@@ -1590,16 +1531,18 @@
       </div>
 
       <!-- Players Grid -->
-      <div class="players-table-grid" id="gamePlayersGrid">
-        <!-- Rendered dynamically -->
-      </div>
+      <div class="players-table-grid" id="gamePlayersGrid"></div>
 
-      <!-- Game Actions Controls (e.g. Vote button, Next Phase button for host) -->
-      <div style="display: flex; gap: 10px; margin-top: 12px;" id="gameControlsRow">
+      <!-- Game Actions Controls -->
+      <div style="display: flex; gap: 10px; margin-top: 10px;" id="gameControlsRow">
         <button class="btn-primary" id="btnHostNextPhase" style="display: none; padding: 10px 18px; font-size: 0.88rem;">
-          ⏩ 次のフェーズへ進む (ホスト)
+          ⏩ 投票へ進む / スキップ (ホスト)
+        </button>
+        <button class="btn-secondary" id="btnReturnToLobby" style="display: none; padding: 10px 18px; font-size: 0.88rem;">
+          🏠 待機室へ戻る
         </button>
       </div>
+
     </div>
   </div>
 
