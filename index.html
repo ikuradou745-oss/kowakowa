@@ -5,28 +5,39 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>人狼オンライン (Werewolf)</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐺</text></svg>">
-  <meta name="description" content="シンプルなGUIで楽しめるオンライン人狼ゲーム。ニックネーム設定、VC音量調整（50%〜500%）、オンラインプレイ、役職確認機能を搭載。">
+  <meta name="description" content="シンプルなGUIで楽しめるオンライン人狼ゲーム。明るく清潔感あるデザイン、WebRTCボイスチャット、左上チャット（最大20文字）、最低3人から開始可能。">
   <meta property="og:title" content="人狼オンライン (Werewolf)">
-  <meta property="og:description" content="シンプルなGUIで楽しめるオンライン人狼ゲーム。ニックネーム設定、VC音量調整（50%〜500%）、オンラインプレイ、役職確認機能を搭載。">
+  <meta property="og:description" content="シンプルなGUIで楽しめるオンライン人狼ゲーム。明るく清潔感あるデザイン、WebRTCボイスチャット、左上チャット（最大20文字）、最低3人から開始可能。">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
   <style>
+    /* --- Bright / White Modern Design Theme (ユーザー要望: デザインを白色・明るく) --- */
     :root {
-      --bg-dark: #07090e;
-      --bg-card: rgba(15, 20, 32, 0.94);
-      --bg-card-hover: rgba(22, 30, 48, 0.96);
-      --border-color: rgba(255, 255, 255, 0.12);
-      --border-accent: rgba(225, 29, 72, 0.6);
-      --text-main: #f8fafc;
-      --text-muted: #94a3b8;
+      --bg-main: #f8fafc;
+      --bg-card: #ffffff;
+      --bg-card-subtle: #f1f5f9;
+      --border-color: #e2e8f0;
+      --border-strong: #cbd5e1;
+      --border-accent: rgba(225, 29, 72, 0.35);
+      --text-main: #0f172a;
+      --text-sub: #334155;
+      --text-muted: #64748b;
       --crimson: #e11d48;
-      --crimson-hover: #f43f5e;
-      --moon-gold: #fbbf24;
-      --moon-blue: #38bdf8;
-      --villager-color: #3b82f6;
-      --werewolf-color: #ef4444;
-      --third-color: #a855f7;
+      --crimson-hover: #be123c;
+      --crimson-light: #ffe4e6;
+      --emerald: #059669;
+      --emerald-light: #d1fae5;
+      --sky: #0284c7;
+      --sky-light: #e0f2fe;
+      --gold: #d97706;
+      --gold-light: #fef3c7;
+      --villager-color: #2563eb;
+      --werewolf-color: #dc2626;
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.04);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+      --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+      --shadow-xl: 0 20px 30px -10px rgba(0, 0, 0, 0.12), 0 10px 15px -5px rgba(0, 0, 0, 0.06);
     }
 
     * {
@@ -41,16 +52,16 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: var(--bg-dark);
+      background: var(--bg-main);
       font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       color: var(--text-main);
       background-image: 
-        radial-gradient(circle at 50% 18%, rgba(56, 189, 248, 0.08) 0%, transparent 60%),
-        radial-gradient(circle at 80% 80%, rgba(225, 29, 72, 0.05) 0%, transparent 50%),
-        linear-gradient(180deg, #090d15 0%, #05070a 100%);
+        radial-gradient(circle at 50% 8%, rgba(2, 132, 199, 0.06) 0%, transparent 60%),
+        radial-gradient(circle at 85% 85%, rgba(225, 29, 72, 0.04) 0%, transparent 50%),
+        linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
     }
 
-    /* Ambient Moon & Fog Layer */
+    /* Ambient Sun/Moon Light Silhouette */
     .ambient-bg {
       position: fixed;
       top: 0;
@@ -64,15 +75,15 @@
 
     .moon-silhouette {
       position: absolute;
-      top: 6%;
+      top: 4%;
       left: 50%;
       transform: translateX(-50%);
-      width: 280px;
-      height: 280px;
+      width: 320px;
+      height: 320px;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(255, 255, 255, 0.09) 0%, rgba(248, 250, 252, 0.02) 60%, transparent 75%);
-      box-shadow: 0 0 90px rgba(56, 189, 248, 0.08);
-      filter: blur(2px);
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.9) 0%, rgba(241, 245, 249, 0.4) 60%, transparent 75%);
+      box-shadow: 0 0 120px rgba(2, 132, 199, 0.12);
+      filter: blur(4px);
     }
 
     /* Main App Container */
@@ -90,8 +101,12 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 18px 28px;
+      padding: 16px 24px;
       width: 100%;
+      background: rgba(255, 255, 255, 0.85);
+      border-bottom: 1px solid var(--border-color);
+      backdrop-filter: blur(12px);
+      box-shadow: var(--shadow-sm);
       z-index: 20;
     }
 
@@ -100,112 +115,317 @@
       align-items: center;
       gap: 10px;
       font-family: 'Cinzel', 'Noto Sans JP', serif;
-      font-size: 1.25rem;
-      font-weight: 800;
-      letter-spacing: 0.12em;
+      font-size: 1.35rem;
+      font-weight: 900;
+      letter-spacing: 0.08em;
       color: var(--text-main);
-      text-shadow: 0 0 16px rgba(255, 255, 255, 0.3);
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     }
 
     .brand-logo .wolf-icon {
-      font-size: 1.5rem;
-      filter: drop-shadow(0 0 8px rgba(225, 29, 72, 0.6));
+      font-size: 1.6rem;
+      filter: drop-shadow(0 2px 6px rgba(225, 29, 72, 0.3));
     }
 
     .top-right-bar {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
     }
+
+    /* Chips (Coins, Nickname, Settings) */
+    .coins-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--gold-light);
+      border: 1px solid rgba(217, 119, 6, 0.3);
+      border-radius: 9999px;
+      padding: 7px 14px;
+      font-size: 0.9rem;
+      font-weight: 800;
+      color: var(--gold);
+      cursor: pointer;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .coins-chip:hover {
+      background: #fde68a;
+      border-color: rgba(217, 119, 6, 0.6);
+      transform: translateY(-1px);
+    }
+
+    .coins-chip .coin-icon { font-size: 1rem; }
+    .coins-chip .coin-unit { font-size: 0.75rem; opacity: 0.85; }
 
     .nickname-chip {
       display: flex;
       align-items: center;
       gap: 8px;
-      background: rgba(18, 24, 38, 0.85);
+      background: #ffffff;
       border: 1px solid var(--border-color);
       border-radius: 9999px;
-      padding: 8px 16px;
-      font-size: 0.92rem;
+      padding: 7px 16px;
+      font-size: 0.9rem;
       font-weight: 700;
-      color: #e2e8f0;
-      backdrop-filter: blur(8px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+      color: var(--text-main);
+      box-shadow: var(--shadow-sm);
+      cursor: pointer;
       transition: all 0.2s ease;
     }
 
+    .nickname-chip:hover {
+      border-color: var(--border-strong);
+      background: var(--bg-card-subtle);
+    }
+
     .nickname-chip .user-icon {
-      color: var(--moon-gold);
+      color: var(--sky);
       font-size: 1rem;
     }
 
     .nickname-chip .nick-text {
-      max-width: 120px;
+      max-width: 110px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-    }
-
-    .coins-chip {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      background: rgba(251, 191, 36, 0.12);
-      border: 1px solid rgba(251, 191, 36, 0.4);
-      border-radius: 9999px;
-      padding: 8px 14px;
-      font-size: 0.92rem;
-      font-weight: 800;
-      color: var(--moon-gold);
-      backdrop-filter: blur(8px);
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-
-    .coins-chip:hover {
-      background: rgba(251, 191, 36, 0.22);
-      border-color: rgba(251, 191, 36, 0.8);
-      transform: translateY(-1px);
-      box-shadow: 0 6px 16px rgba(251, 191, 36, 0.25);
-    }
-
-    .coins-chip .coin-icon {
-      font-size: 1rem;
-    }
-
-    .coins-chip .coin-unit {
-      font-size: 0.75rem;
-      opacity: 0.8;
-      margin-left: 1px;
     }
 
     .btn-settings {
       display: flex;
       align-items: center;
       gap: 6px;
-      background: rgba(22, 29, 45, 0.9);
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      color: #f1f5f9;
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      color: var(--text-sub);
       font-size: 0.9rem;
       font-weight: 700;
-      padding: 8px 16px;
+      padding: 7px 14px;
       border-radius: 9999px;
       cursor: pointer;
-      backdrop-filter: blur(8px);
+      box-shadow: var(--shadow-sm);
       transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
     }
 
     .btn-settings:hover {
-      background: rgba(35, 46, 70, 0.95);
-      border-color: rgba(255, 255, 255, 0.4);
+      background: var(--bg-card-subtle);
+      border-color: var(--border-strong);
+      color: var(--text-main);
       transform: translateY(-1px);
-      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
     }
 
-    .btn-settings:active {
-      transform: translateY(1px);
+    /* --- Top-Left Chat Overlay (ユーザー要望: 左上にチャット、最大20文字) --- */
+    .top-left-chat-container {
+      position: fixed;
+      top: 76px;
+      left: 18px;
+      width: 320px;
+      max-width: calc(100vw - 36px);
+      background: rgba(255, 255, 255, 0.96);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      box-shadow: var(--shadow-lg);
+      backdrop-filter: blur(14px);
+      z-index: 100;
+      overflow: hidden;
+      display: none; /* Shown when inside a room */
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .chat-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 0.78rem;
+      font-weight: 800;
+    }
+
+    .chat-mode-badge {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      font-size: 0.74rem;
+      font-weight: 700;
+    }
+
+    .chat-mode-badge.vc-on {
+      background: var(--emerald-light);
+      color: var(--emerald);
+    }
+
+    .chat-mode-badge.vc-off {
+      background: var(--sky-light);
+      color: var(--sky);
+    }
+
+    .btn-chat-toggle {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .btn-chat-toggle:hover {
+      background: #e2e8f0;
+      color: var(--text-main);
+    }
+
+    .chat-messages-box {
+      height: 140px;
+      overflow-y: auto;
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.82rem;
+      background: #ffffff;
+    }
+
+    .chat-message-item {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      line-height: 1.4;
+      word-break: break-all;
+    }
+
+    .chat-sender-name {
+      font-weight: 800;
+      color: var(--crimson);
+      white-space: nowrap;
+    }
+
+    .chat-sender-name.is-me {
+      color: var(--sky);
+    }
+
+    .chat-sender-name.is-system {
+      color: var(--emerald);
+    }
+
+    .chat-content-text {
+      color: var(--text-main);
+      font-weight: 500;
+    }
+
+    .chat-input-bar {
+      padding: 8px 10px;
+      background: #f8fafc;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .chat-input-wrapper {
+      position: relative;
+      flex: 1;
+    }
+
+    .chat-text-input {
+      width: 100%;
+      padding: 7px 42px 7px 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      font-size: 0.82rem;
+      color: var(--text-main);
+      background: #ffffff;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .chat-text-input:focus {
+      border-color: var(--sky);
+    }
+
+    .chat-counter {
+      position: absolute;
+      right: 6px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      pointer-events: none;
+      font-weight: 700;
+    }
+
+    .btn-chat-send {
+      padding: 6px 12px;
+      background: var(--sky);
+      border: none;
+      border-radius: 8px;
+      color: #ffffff;
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn-chat-send:hover {
+      background: #0369a1;
+    }
+
+    /* --- Floating Room Voice Control Bar --- */
+    .room-voice-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 12px 0;
+      padding: 8px 14px;
+      background: #f8fafc;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .btn-voice-toggle {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: #ffffff;
+      color: var(--text-sub);
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-voice-toggle.active {
+      background: var(--emerald-light);
+      border-color: rgba(5, 150, 105, 0.4);
+      color: var(--emerald);
+    }
+
+    .btn-voice-toggle.muted {
+      background: var(--crimson-light);
+      border-color: rgba(225, 29, 72, 0.4);
+      color: var(--crimson);
+    }
+
+    .speaking-indicator-ring {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #cbd5e1;
+      transition: background 0.2s, transform 0.2s;
+    }
+
+    .speaking-indicator-ring.speaking {
+      background: #22c55e;
+      transform: scale(1.3);
+      box-shadow: 0 0 8px #22c55e;
     }
 
     /* Center Content Area */
@@ -217,255 +437,226 @@
       justify-content: center;
       padding: 20px;
       text-align: center;
+      z-index: 10;
     }
 
     .game-hero {
-      margin-bottom: 40px;
+      margin-bottom: 36px;
     }
 
     .game-main-title {
       font-family: 'Cinzel', 'Noto Sans JP', serif;
       font-size: clamp(3rem, 7vw, 4.8rem);
       font-weight: 900;
-      letter-spacing: 0.18em;
-      color: #ffffff;
-      text-shadow: 
-        0 0 24px rgba(225, 29, 72, 0.5),
-        0 4px 20px rgba(0, 0, 0, 0.9);
+      letter-spacing: 0.14em;
+      color: var(--text-main);
+      text-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
       line-height: 1.1;
       margin-bottom: 8px;
     }
 
     .game-subtitle {
       font-size: 1rem;
-      letter-spacing: 0.25em;
+      letter-spacing: 0.22em;
       color: var(--text-muted);
-      font-weight: 500;
+      font-weight: 700;
       text-transform: uppercase;
     }
 
-    /* Two Main Buttons in Center */
+    /* 3 Main Action Buttons */
     .main-actions-container {
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 14px;
       width: 100%;
       max-width: 380px;
     }
 
     .btn-main-action {
-      position: relative;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 12px;
-      width: 100%;
-      padding: 18px 28px;
-      font-size: 1.25rem;
+      gap: 14px;
+      padding: 16px 24px;
+      border-radius: 18px;
+      font-size: 1.15rem;
       font-weight: 800;
-      letter-spacing: 0.08em;
-      border-radius: 14px;
       cursor: pointer;
-      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
-      text-decoration: none;
-      outline: none;
+      border: 1px solid var(--border-color);
+      box-shadow: var(--shadow-md);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .btn-main-action:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .btn-main-action:active {
+      transform: translateY(1px);
     }
 
     .btn-online-play {
       background: linear-gradient(135deg, #e11d48 0%, #be123c 100%);
       color: #ffffff;
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      box-shadow: 
-        0 8px 30px rgba(225, 29, 72, 0.4),
-        inset 0 1px 1px rgba(255, 255, 255, 0.3);
+      border-color: #be123c;
     }
 
     .btn-online-play:hover {
       background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);
-      transform: translateY(-2px);
-      box-shadow: 
-        0 12px 36px rgba(225, 29, 72, 0.55),
-        inset 0 1px 1px rgba(255, 255, 255, 0.4);
-    }
-
-    .btn-online-play:active {
-      transform: translateY(1px);
-      box-shadow: 0 4px 16px rgba(225, 29, 72, 0.3);
+      box-shadow: 0 10px 24px -4px rgba(225, 29, 72, 0.35);
     }
 
     .btn-role-guide {
-      background: rgba(18, 25, 42, 0.88);
-      color: #f1f5f9;
-      border: 1px solid rgba(255, 255, 255, 0.16);
-      backdrop-filter: blur(12px);
+      background: #ffffff;
+      color: var(--text-main);
     }
 
     .btn-role-guide:hover {
-      background: rgba(28, 38, 62, 0.95);
-      border-color: rgba(255, 255, 255, 0.32);
-      transform: translateY(-2px);
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
-    }
-
-    .btn-role-guide:active {
-      transform: translateY(1px);
+      background: var(--bg-card-subtle);
+      border-color: var(--border-strong);
     }
 
     .btn-shop {
-      background: linear-gradient(135deg, #b45309 0%, #78350f 100%);
-      color: #ffffff;
-      border: 1px solid rgba(251, 191, 36, 0.45);
-      box-shadow: 
-        0 8px 24px rgba(180, 83, 9, 0.35),
-        inset 0 1px 1px rgba(255, 255, 255, 0.25);
+      background: #ffffff;
+      color: var(--gold);
+      border-color: rgba(217, 119, 6, 0.3);
     }
 
     .btn-shop:hover {
-      background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
-      border-color: rgba(251, 191, 36, 0.7);
-      transform: translateY(-2px);
-      box-shadow: 
-        0 12px 32px rgba(245, 158, 11, 0.45),
-        inset 0 1px 1px rgba(255, 255, 255, 0.4);
+      background: var(--gold-light);
+      border-color: rgba(217, 119, 6, 0.5);
     }
 
-    .btn-shop:active {
-      transform: translateY(1px);
-    }
-
-    .btn-icon {
-      font-size: 1.4rem;
-    }
-
-    /* Modal Overlay */
+    /* Generic Modal Styling (Clean White & High Contrast) */
     .modal-overlay {
       position: fixed;
-      inset: 0;
-      background: rgba(3, 5, 8, 0.82);
-      backdrop-filter: blur(10px);
-      z-index: 100;
-      display: none;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(15, 23, 42, 0.45);
+      backdrop-filter: blur(8px);
+      display: flex;
       align-items: center;
       justify-content: center;
+      z-index: 1000;
       padding: 16px;
       opacity: 0;
-      transition: opacity 0.2s ease;
+      pointer-events: none;
+      transition: opacity 0.22s ease;
     }
 
     .modal-overlay.active {
-      display: flex;
       opacity: 1;
+      pointer-events: auto;
     }
 
     .modal-card {
-      background: var(--bg-card);
+      background: #ffffff;
       border: 1px solid var(--border-color);
-      border-radius: 18px;
+      border-radius: 24px;
+      box-shadow: var(--shadow-xl);
       width: 100%;
-      max-width: 520px;
-      max-height: 88vh;
+      max-width: 500px;
+      max-height: 90vh;
       overflow-y: auto;
-      padding: 26px 28px;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.85);
-      color: var(--text-main);
-      transform: scale(0.96);
-      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      padding: 26px 24px;
+      transform: scale(0.96) translateY(8px);
+      transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     .modal-overlay.active .modal-card {
-      transform: scale(1);
+      transform: scale(1) translateY(0);
     }
 
     .modal-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-bottom: 1px solid var(--border-color);
-      padding-bottom: 14px;
-      margin-bottom: 20px;
+      margin-bottom: 18px;
     }
 
     .modal-title {
-      font-size: 1.3rem;
+      font-size: 1.25rem;
       font-weight: 800;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      color: #fff;
+      color: var(--text-main);
     }
 
     .btn-modal-close {
-      background: transparent;
+      background: #f1f5f9;
       border: none;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      font-size: 1rem;
       color: var(--text-muted);
-      font-size: 1.5rem;
       cursor: pointer;
-      line-height: 1;
-      padding: 4px;
-      border-radius: 6px;
-      transition: color 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
     }
 
     .btn-modal-close:hover {
-      color: #fff;
+      background: #e2e8f0;
+      color: var(--text-main);
     }
 
-    /* Form & Input Groups */
     .form-group {
-      margin-bottom: 22px;
+      margin-bottom: 20px;
+      text-align: left;
     }
 
     .form-label {
       display: block;
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       font-weight: 700;
-      color: #cbd5e1;
-      margin-bottom: 8px;
+      color: var(--text-sub);
+      margin-bottom: 6px;
     }
 
     .form-label-desc {
       font-size: 0.78rem;
-      font-weight: 400;
       color: var(--text-muted);
-      margin-left: 6px;
+      font-weight: 500;
     }
 
     .input-wrapper {
       position: relative;
-      display: flex;
-      align-items: center;
     }
 
     .text-input {
       width: 100%;
-      background: rgba(8, 12, 20, 0.9);
-      border: 1.5px solid rgba(255, 255, 255, 0.16);
-      border-radius: 10px;
+      background: #ffffff;
+      border: 1.5px solid var(--border-color);
+      border-radius: 12px;
       padding: 12px 14px;
-      color: #fff;
-      font-size: 1.05rem;
+      color: var(--text-main);
+      font-size: 0.95rem;
+      font-weight: 600;
       outline: none;
-      transition: border-color 0.15s, box-shadow 0.15s;
-      font-family: inherit;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
 
     .text-input:focus {
-      border-color: var(--crimson);
-      box-shadow: 0 0 12px rgba(225, 29, 72, 0.35);
+      border-color: var(--sky);
+      box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12);
     }
 
     .char-counter {
       position: absolute;
-      right: 14px;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
       font-size: 0.8rem;
       color: var(--text-muted);
-      pointer-events: none;
+      font-weight: 700;
     }
 
     .input-error-msg {
-      font-size: 0.8rem;
-      color: #f87171;
+      font-size: 0.78rem;
+      color: var(--crimson);
       margin-top: 6px;
       display: none;
     }
@@ -474,536 +665,182 @@
       display: block;
     }
 
-    /* VC Volume Controls (50% ~ 500%) */
-    .vc-volume-container {
-      background: rgba(8, 12, 20, 0.7);
-      border: 1px solid var(--border-color);
-      border-radius: 14px;
-      padding: 16px;
-      margin-top: 8px;
-    }
-
-    .volume-header-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
-    }
-
-    .volume-value-badge {
-      display: flex;
-      align-items: baseline;
-      gap: 2px;
-      background: rgba(225, 29, 72, 0.18);
-      border: 1px solid rgba(225, 29, 72, 0.4);
-      padding: 4px 12px;
-      border-radius: 8px;
-      color: #fda4af;
-      font-weight: 800;
-      font-size: 1.2rem;
-    }
-
-    .volume-value-unit {
-      font-size: 0.85rem;
-      color: #f43f5e;
-    }
-
-    .range-slider {
-      -webkit-appearance: none;
-      width: 100%;
-      height: 8px;
-      border-radius: 4px;
-      background: #1e293b;
-      outline: none;
-      cursor: pointer;
-      margin-bottom: 14px;
-    }
-
-    .range-slider::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      background: #e11d48;
-      cursor: pointer;
-      border: 2px solid #ffffff;
-      box-shadow: 0 0 10px rgba(225, 29, 72, 0.8);
-      transition: transform 0.1s;
-    }
-
-    .range-slider::-webkit-slider-thumb:hover {
-      transform: scale(1.15);
-    }
-
-    .preset-pills {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-      margin-bottom: 14px;
-    }
-
-    .preset-pill {
-      background: rgba(30, 41, 59, 0.8);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      color: #cbd5e1;
-      font-size: 0.78rem;
-      font-weight: 700;
-      padding: 5px 10px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-
-    .preset-pill:hover {
-      background: rgba(51, 65, 85, 0.9);
-      color: #fff;
-    }
-
-    .preset-pill.active {
-      background: var(--crimson);
-      color: #fff;
-      border-color: var(--crimson-hover);
-    }
-
-    .vc-test-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
-      padding-top: 10px;
-      font-size: 0.82rem;
-      color: var(--text-muted);
-    }
-
-    .btn-test-volume {
-      background: rgba(56, 189, 248, 0.15);
-      border: 1px solid rgba(56, 189, 248, 0.35);
-      color: #38bdf8;
-      font-size: 0.82rem;
-      font-weight: 700;
-      padding: 6px 14px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-
-    .btn-test-volume:hover {
-      background: rgba(56, 189, 248, 0.25);
-    }
-
-    /* Modal Button Bar */
     .modal-actions-bar {
       display: flex;
       gap: 10px;
-      margin-top: 24px;
+      margin-top: 20px;
     }
 
     .btn-primary {
       flex: 1;
+      padding: 12px 20px;
       background: var(--crimson);
-      color: #fff;
+      color: #ffffff;
       border: none;
-      padding: 12px 18px;
-      border-radius: 10px;
-      font-size: 1rem;
+      border-radius: 12px;
+      font-size: 0.95rem;
       font-weight: 800;
       cursor: pointer;
-      transition: background 0.15s, transform 0.1s;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s;
     }
 
-    .btn-primary:hover {
+    .btn-primary:hover:not(:disabled) {
       background: var(--crimson-hover);
-      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      background: #94a3b8;
     }
 
     .btn-secondary {
-      background: rgba(30, 41, 59, 0.8);
-      color: #cbd5e1;
+      padding: 12px 20px;
+      background: #f1f5f9;
+      color: var(--text-sub);
       border: 1px solid var(--border-color);
-      padding: 12px 18px;
-      border-radius: 10px;
+      border-radius: 12px;
       font-size: 0.95rem;
       font-weight: 700;
       cursor: pointer;
-      transition: all 0.15s;
+      transition: all 0.2s;
     }
 
     .btn-secondary:hover {
-      background: rgba(51, 65, 85, 0.9);
-      color: #fff;
+      background: #e2e8f0;
+      color: var(--text-main);
     }
 
-    /* Role Cards */
-    .role-tabs {
+    /* Range Slider */
+    .range-slider {
+      width: 100%;
+      height: 8px;
+      background: #e2e8f0;
+      border-radius: 9999px;
+      outline: none;
+      -webkit-appearance: none;
+      cursor: pointer;
+      margin: 12px 0;
+    }
+
+    .range-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--crimson);
+      box-shadow: var(--shadow-md);
+      cursor: pointer;
+    }
+
+    /* VC Volume presets */
+    .preset-pills {
       display: flex;
+      flex-wrap: wrap;
       gap: 6px;
-      margin-bottom: 16px;
-      overflow-x: auto;
-      padding-bottom: 4px;
+      margin-top: 10px;
     }
 
-    .role-tab {
-      background: rgba(30, 41, 59, 0.6);
+    .preset-pill {
+      background: #f1f5f9;
       border: 1px solid var(--border-color);
-      color: var(--text-muted);
-      font-size: 0.82rem;
-      font-weight: 700;
-      padding: 6px 14px;
-      border-radius: 8px;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: all 0.15s;
-    }
-
-    .role-tab:hover {
-      color: #fff;
-    }
-
-    .role-tab.active {
-      background: rgba(225, 29, 72, 0.2);
-      border-color: var(--crimson);
-      color: #fff;
-    }
-
-    .roles-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      max-height: 52vh;
-      overflow-y: auto;
-      padding-right: 4px;
-    }
-
-    .role-card {
-      background: rgba(10, 15, 26, 0.8);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: 14px 16px;
-      transition: border-color 0.15s;
-    }
-
-    .role-card:hover {
-      border-color: rgba(255, 255, 255, 0.25);
-    }
-
-    .role-card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 6px;
-    }
-
-    .role-name-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 1.05rem;
-      font-weight: 800;
-    }
-
-    .camp-badge {
-      font-size: 0.72rem;
-      font-weight: 800;
-      padding: 2px 8px;
-      border-radius: 6px;
-    }
-
-    .camp-villager {
-      background: rgba(59, 130, 246, 0.2);
-      color: #60a5fa;
-      border: 1px solid rgba(59, 130, 246, 0.4);
-    }
-
-    .camp-werewolf {
-      background: rgba(239, 68, 68, 0.2);
-      color: #f87171;
-      border: 1px solid rgba(239, 68, 68, 0.4);
-    }
-
-    .camp-third {
-      background: rgba(168, 85, 247, 0.2);
-      color: #c084fc;
-      border: 1px solid rgba(168, 85, 247, 0.4);
-    }
-
-    .role-desc {
-      font-size: 0.84rem;
-      color: #cbd5e1;
-      line-height: 1.5;
-      margin-bottom: 6px;
-    }
-
-    .role-win-condition {
+      border-radius: 9999px;
+      padding: 5px 10px;
       font-size: 0.78rem;
-      color: var(--moon-gold);
-      font-weight: 600;
-    }
-
-    .role-shop-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 0.72rem;
       font-weight: 700;
-      padding: 2px 8px;
-      border-radius: 6px;
-      margin-left: 6px;
-    }
-
-    .role-shop-badge.unlocked {
-      background: rgba(34, 197, 94, 0.15);
-      border: 1px solid rgba(34, 197, 94, 0.4);
-      color: #4ade80;
-    }
-
-    .role-shop-badge.locked {
-      background: rgba(251, 191, 36, 0.15);
-      border: 1px solid rgba(251, 191, 36, 0.4);
-      color: #fbbf24;
+      color: var(--text-sub);
       cursor: pointer;
+      transition: all 0.2s;
     }
 
-    .role-shop-badge.locked:hover {
-      background: rgba(251, 191, 36, 0.28);
+    .preset-pill.active, .preset-pill:hover {
+      background: var(--sky-light);
+      border-color: rgba(2, 132, 199, 0.4);
+      color: var(--sky);
     }
 
-    /* Shop Modal Styles */
-    .shop-balance-bar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: rgba(18, 24, 38, 0.9);
-      border: 1px solid rgba(251, 191, 36, 0.35);
-      border-radius: 12px;
-      padding: 12px 16px;
-      margin-bottom: 12px;
-    }
-
-    .shop-coin-info {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .shop-coin-display {
-      display: flex;
-      align-items: baseline;
-      gap: 4px;
-      font-size: 1.35rem;
-      font-weight: 900;
-      color: var(--moon-gold);
-      letter-spacing: 0.05em;
-    }
-
-    .btn-test-coin {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      background: rgba(251, 191, 36, 0.15);
-      border: 1px solid rgba(251, 191, 36, 0.4);
-      color: #fbbf24;
-      font-size: 0.78rem;
-      font-weight: 800;
-      padding: 6px 12px;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.15s ease;
-    }
-
-    .btn-test-coin:hover {
-      background: rgba(251, 191, 36, 0.3);
-      transform: translateY(-1px);
-    }
-
-    .btn-test-coin:active {
-      transform: translateY(1px);
-    }
-
-    .shop-items-list {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      max-height: 52vh;
-      overflow-y: auto;
-      padding-right: 4px;
-    }
-
-    .shop-card {
-      background: rgba(10, 15, 26, 0.85);
-      border: 1px solid var(--border-color);
-      border-radius: 14px;
-      padding: 16px;
-      transition: all 0.2s ease;
-    }
-
-    .shop-card.unlocked-card {
-      border-color: rgba(34, 197, 94, 0.35);
-      background: rgba(10, 24, 20, 0.65);
-    }
-
-    .shop-card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
-    }
-
-    .shop-role-name {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 1.1rem;
-      font-weight: 800;
-      color: #fff;
-    }
-
-    .shop-cost-tag {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      background: rgba(251, 191, 36, 0.15);
-      border: 1px solid rgba(251, 191, 36, 0.35);
-      padding: 3px 10px;
-      border-radius: 8px;
-      font-size: 0.85rem;
-      font-weight: 800;
-      color: var(--moon-gold);
-    }
-
-    .shop-card-desc {
-      font-size: 0.86rem;
-      color: #cbd5e1;
-      line-height: 1.5;
-      margin-bottom: 12px;
-    }
-
-    .shop-card-footer {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
-      padding-top: 10px;
-    }
-
-    .btn-buy-role {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
-      color: #ffffff;
-      border: 1px solid rgba(251, 191, 36, 0.5);
-      padding: 8px 16px;
-      border-radius: 8px;
-      font-size: 0.88rem;
-      font-weight: 800;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(217, 119, 6, 0.3);
-      transition: all 0.15s ease;
-    }
-
-    .btn-buy-role:hover:not(:disabled) {
-      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-      transform: translateY(-1px);
-      box-shadow: 0 6px 16px rgba(245, 158, 11, 0.4);
-    }
-
-    .btn-buy-role:disabled {
-      background: rgba(51, 65, 85, 0.5);
-      border-color: rgba(255, 255, 255, 0.1);
-      color: #94a3b8;
-      cursor: not-allowed;
-      box-shadow: none;
-    }
-
-    .badge-unlocked-status {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      background: rgba(34, 197, 94, 0.18);
-      border: 1px solid rgba(34, 197, 94, 0.4);
-      color: #4ade80;
-      padding: 6px 14px;
-      border-radius: 8px;
-      font-size: 0.85rem;
-      font-weight: 800;
-    }
-
-    /* Online Play Modal Specific */
+    /* Online Play Options Grid */
     .online-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 12px;
+      gap: 14px;
       margin-bottom: 16px;
     }
 
     .online-action-box {
-      background: rgba(10, 15, 26, 0.8);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: 16px;
+      background: #ffffff;
+      border: 1.5px solid var(--border-color);
+      border-radius: 16px;
+      padding: 20px 14px;
       text-align: center;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
       cursor: pointer;
-      transition: all 0.15s ease;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     .online-action-box:hover {
-      background: rgba(20, 28, 48, 0.9);
       border-color: var(--crimson);
+      background: var(--crimson-light);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
     }
 
     .online-action-box .box-icon {
-      font-size: 2rem;
-      margin-bottom: 6px;
+      font-size: 2.2rem;
+      margin-bottom: 8px;
+      display: block;
     }
 
     .online-action-box .box-title {
       font-size: 1rem;
       font-weight: 800;
-      color: #fff;
+      color: var(--text-main);
+      display: block;
       margin-bottom: 4px;
     }
 
     .online-action-box .box-desc {
       font-size: 0.75rem;
       color: var(--text-muted);
+      line-height: 1.4;
+      display: block;
     }
 
+    /* Room Waiting Lobby */
     .room-code-badge {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      background: rgba(0, 0, 0, 0.6);
-      border: 1px solid var(--moon-gold);
-      padding: 8px 16px;
+      background: #f8fafc;
+      border: 1.5px dashed var(--border-strong);
       border-radius: 12px;
+      padding: 8px 16px;
       font-size: 1.4rem;
       font-weight: 900;
-      color: var(--moon-gold);
+      color: var(--crimson);
       letter-spacing: 0.1em;
       margin-bottom: 14px;
     }
 
     .btn-copy-code {
-      background: var(--moon-gold);
-      color: #000;
-      border: none;
-      font-size: 0.75rem;
-      font-weight: 800;
-      padding: 4px 10px;
+      background: #ffffff;
+      border: 1px solid var(--border-color);
       border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text-sub);
       cursor: pointer;
     }
+    .btn-copy-code:hover { background: #e2e8f0; }
 
     .lobby-roster {
       display: flex;
       flex-direction: column;
       gap: 8px;
-      max-height: 200px;
+      max-height: 220px;
       overflow-y: auto;
       margin-bottom: 16px;
     }
@@ -1012,274 +849,230 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: rgba(15, 23, 42, 0.8);
+      background: #f8fafc;
       border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 10px 14px;
-      font-size: 0.9rem;
-      font-weight: 700;
-    }
-
-    .lobby-player-host-tag {
-      background: var(--crimson);
-      color: #fff;
-      font-size: 0.68rem;
-      font-weight: 800;
-      padding: 2px 6px;
-      border-radius: 4px;
-    }
-
-    /* Leader crown badge */
-    .lobby-player-leader-tag {
-      display: inline-flex;
-      align-items: center;
-      gap: 3px;
-      background: rgba(251, 191, 36, 0.18);
-      border: 1px solid rgba(251, 191, 36, 0.6);
-      color: var(--moon-gold);
-      font-size: 0.72rem;
-      font-weight: 800;
-      padding: 3px 8px;
-      border-radius: 6px;
-      text-shadow: 0 0 8px rgba(251, 191, 36, 0.4);
-    }
-
-    /* Invite Card Box */
-    .lobby-invite-card {
-      background: rgba(12, 18, 30, 0.85);
-      border: 1px dashed rgba(56, 189, 248, 0.4);
       border-radius: 12px;
-      padding: 14px;
-      margin-bottom: 16px;
-      text-align: left;
+      padding: 8px 14px;
     }
 
-    .invite-header-row {
+    .lobby-player-info {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      margin-bottom: 8px;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 0.9rem;
     }
 
-    .invite-label {
-      font-size: 0.84rem;
-      font-weight: 800;
-      color: #38bdf8;
+    .lobby-player-voice-status {
       display: flex;
       align-items: center;
       gap: 6px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    /* Requirement: Minimum 3 players required */
+    .min-player-warning {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 0.8rem;
+      color: #92400e;
+      font-weight: 700;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Invite Link Box */
+    .lobby-invite-card {
+      background: #f8fafc;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 12px;
+      text-align: left;
+      margin-bottom: 14px;
     }
 
     .invite-text-box {
-      background: rgba(5, 8, 14, 0.8);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 8px;
-      padding: 10px 12px;
-      font-size: 0.82rem;
-      line-height: 1.55;
-      color: #f1f5f9;
-      margin-bottom: 10px;
-      user-select: text;
-      -webkit-user-select: text;
-      font-family: inherit;
-      white-space: pre-wrap;
-    }
-
-    .btn-invite-copy {
-      width: 100%;
-      background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
-      color: #fff;
-      border: 1px solid rgba(56, 189, 248, 0.5);
-      padding: 10px 16px;
-      border-radius: 8px;
-      font-size: 0.9rem;
-      font-weight: 800;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
-      transition: all 0.15s ease;
-    }
-
-    .btn-invite-copy:hover {
-      background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
-      transform: translateY(-1px);
-      box-shadow: 0 6px 18px rgba(2, 132, 199, 0.45);
-    }
-
-    .room-settings-summary-bar {
-      background: rgba(18, 24, 38, 0.7);
+      background: #ffffff;
       border: 1px solid var(--border-color);
-      border-radius: 10px;
-      padding: 10px 14px;
-      font-size: 0.82rem;
-      color: #cbd5e1;
-      margin-bottom: 14px;
-      text-align: left;
-      line-height: 1.5;
-    }
-
-    /* Create Room Form Styles */
-    .create-room-panel {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .panel-section {
-      background: rgba(10, 15, 26, 0.7);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: 14px;
-    }
-
-    .section-title {
-      font-size: 0.92rem;
-      font-weight: 800;
-      color: #e2e8f0;
-      margin-bottom: 10px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .mode-tab-buttons {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-
-    .btn-mode-tab {
-      background: rgba(15, 23, 42, 0.7);
-      border: 1.5px solid var(--border-color);
-      color: var(--text-muted);
-      padding: 10px 12px;
-      border-radius: 10px;
-      font-size: 0.86rem;
-      font-weight: 800;
-      cursor: pointer;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 2px;
-      transition: all 0.15s ease;
-    }
-
-    .btn-mode-tab.active {
-      background: rgba(225, 29, 72, 0.15);
-      border-color: var(--crimson);
-      color: #fff;
-    }
-
-    .btn-mode-tab:hover:not(.active) {
-      background: rgba(30, 41, 59, 0.8);
-      color: #fff;
-    }
-
-    .role-stepper-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      border-radius: 8px;
       padding: 8px 10px;
-      background: rgba(15, 23, 42, 0.6);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 8px;
+      font-size: 0.78rem;
+      color: var(--text-sub);
+      white-space: pre-wrap;
+      font-family: monospace;
+      margin: 6px 0;
+    }
+
+    /* Roles Guide & Shop lists */
+    .roles-list, .shop-items-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 50vh;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .role-card, .shop-item-card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 14px;
+      text-align: left;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .role-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       margin-bottom: 6px;
     }
 
-    .role-stepper-ctrl {
+    .role-badge {
+      padding: 3px 8px;
+      border-radius: 9999px;
+      font-size: 0.72rem;
+      font-weight: 800;
+    }
+    .role-badge.villager { background: var(--sky-light); color: var(--villager-color); }
+    .role-badge.werewolf { background: var(--crimson-light); color: var(--werewolf-color); }
+
+    /* In-Game View Container */
+    #gameView {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--bg-main);
+      z-index: 50;
+      display: none;
+      flex-direction: column;
+    }
+
+    .game-top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 20px;
+      background: #ffffff;
+      border-bottom: 1px solid var(--border-color);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .game-phase-badge {
       display: flex;
       align-items: center;
       gap: 8px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-weight: 800;
+      font-size: 0.9rem;
     }
 
-    .btn-stepper {
-      width: 28px;
-      height: 28px;
-      border-radius: 6px;
-      background: rgba(30, 41, 59, 0.9);
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      color: #fff;
-      font-weight: 800;
-      font-size: 1rem;
-      cursor: pointer;
+    .game-phase-badge.night {
+      background: #1e1b4b;
+      color: #a5b4fc;
+    }
+
+    .game-phase-badge.day {
+      background: #fef3c7;
+      color: #b45309;
+    }
+
+    .game-phase-badge.voting {
+      background: #ffe4e6;
+      color: #be123c;
+    }
+
+    .game-board {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      transition: all 0.1s;
+      gap: 16px;
     }
 
-    .btn-stepper:hover {
-      background: var(--crimson);
-      border-color: var(--crimson);
+    .my-secret-role-card {
+      background: #ffffff;
+      border: 2px solid var(--border-color);
+      border-radius: 18px;
+      padding: 16px 20px;
+      width: 100%;
+      max-width: 440px;
+      box-shadow: var(--shadow-md);
+      text-align: left;
     }
 
-    .stepper-count {
-      min-width: 24px;
+    .players-table-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 12px;
+      width: 100%;
+      max-width: 680px;
+    }
+
+    .game-player-card {
+      background: #ffffff;
+      border: 1.5px solid var(--border-color);
+      border-radius: 14px;
+      padding: 12px 8px;
       text-align: center;
-      font-size: 0.95rem;
-      font-weight: 800;
-      color: #fff;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s;
     }
 
-    .roles-preset-preview {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 8px;
+    .game-player-card.is-dead {
+      opacity: 0.45;
+      background: #f1f5f9;
+      filter: grayscale(1);
     }
 
-    .role-preview-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      background: rgba(18, 25, 42, 0.85);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      padding: 4px 10px;
-      border-radius: 6px;
-      font-size: 0.78rem;
+    .game-player-card.speaking {
+      border-color: #22c55e;
+      box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
+    }
+
+    .btn-target-select {
+      margin-top: 6px;
+      padding: 4px 8px;
+      font-size: 0.75rem;
       font-weight: 700;
-      color: #e2e8f0;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background: #f8fafc;
+      cursor: pointer;
+      width: 100%;
     }
-
-    .ratio-indicator-box {
-      border-radius: 8px;
-      padding: 8px 12px;
-      margin-top: 10px;
-      font-size: 0.8rem;
-      line-height: 1.45;
-    }
-
-    .ratio-indicator-box.valid {
-      background: rgba(34, 197, 94, 0.15);
-      border: 1px solid rgba(34, 197, 94, 0.4);
-      color: #4ade80;
-    }
-
-    .ratio-indicator-box.invalid {
-      background: rgba(239, 68, 68, 0.15);
-      border: 1px solid rgba(239, 68, 68, 0.4);
-      color: #f87171;
+    .btn-target-select:hover {
+      background: var(--crimson-light);
+      color: var(--crimson);
+      border-color: var(--crimson);
     }
 
     /* Toast Notification */
     .toast-msg {
       position: fixed;
-      bottom: 30px;
+      bottom: 24px;
       left: 50%;
-      transform: translateX(-50%) translateY(20px);
-      background: rgba(15, 23, 42, 0.95);
-      border: 1px solid var(--crimson);
-      color: #fff;
-      padding: 10px 22px;
+      transform: translateX(-50%) translateY(30px);
+      background: #0f172a;
+      color: #ffffff;
+      padding: 10px 20px;
       border-radius: 9999px;
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       font-weight: 700;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 16px rgba(225, 29, 72, 0.4);
-      z-index: 200;
+      box-shadow: var(--shadow-lg);
+      z-index: 9999;
       opacity: 0;
       pointer-events: none;
       transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
@@ -1289,46 +1082,56 @@
       transform: translateX(-50%) translateY(0);
       opacity: 1;
     }
-
-    @media (max-width: 640px) {
-      .top-bar {
-        padding: 14px 16px;
-      }
-      .brand-logo {
-        font-size: 1.1rem;
-      }
-      .nickname-chip {
-        padding: 6px 12px;
-        font-size: 0.85rem;
-      }
-      .btn-settings {
-        padding: 6px 12px;
-        font-size: 0.85rem;
-      }
-      .btn-main-action {
-        padding: 16px 22px;
-        font-size: 1.1rem;
-      }
-      .online-grid {
-        grid-template-columns: 1fr;
-      }
-      .modal-card {
-        padding: 20px 18px;
-      }
-    }
   </style>
 </head>
 <body>
 
-  <!-- Ambient Moon & Atmospheric Background -->
+  <!-- Ambient Light Layer -->
   <div class="ambient-bg">
     <div class="moon-silhouette"></div>
   </div>
 
-  <!-- Main Application Wrapper -->
+  <!-- Top-Left Chat Container (ユーザー指定: 左上にチャット、最大20文字、ユーザー名：チャットの内容) -->
+  <div class="top-left-chat-container" id="topLeftChatContainer">
+    <div class="chat-header">
+      <div class="chat-mode-badge vc-on" id="chatModeBadge">
+        <span>🎙️</span>
+        <span id="chatModeText">VC: ON (通話可能)</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span style="font-size: 0.7rem; color: var(--text-muted);">チャット</span>
+        <button class="btn-chat-toggle" id="btnChatToggle" title="折りたたみ">▼</button>
+      </div>
+    </div>
+
+    <div id="chatExpandableArea">
+      <div class="chat-messages-box" id="chatMessagesBox">
+        <div class="chat-message-item" style="color: var(--text-muted); font-size: 0.75rem;">
+          <span>※ 最大20文字までチャット可能です</span>
+        </div>
+      </div>
+
+      <div class="chat-input-bar">
+        <div class="chat-input-wrapper">
+          <input 
+            type="text" 
+            id="chatInput" 
+            class="chat-text-input" 
+            placeholder="メッセージを入力..." 
+            maxlength="20" 
+            autocomplete="off"
+          />
+          <span class="chat-counter" id="chatCharCounter">0/20</span>
+        </div>
+        <button class="btn-chat-send" id="btnSendChat">送信</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main App Wrapper -->
   <div id="app">
     
-    <!-- Top Bar: Logo on left, Nickname & Settings on right -->
+    <!-- Top Bar -->
     <header class="top-bar">
       <div class="brand-logo">
         <span class="wolf-icon">🐺</span>
@@ -1343,10 +1146,13 @@
           <span class="coin-unit">C</span>
         </div>
 
+        <!-- Nickname Chip -->
         <div class="nickname-chip" id="topNicknameChip" title="あなたのニックネーム">
           <span class="user-icon">👤</span>
           <span class="nick-text" id="topNicknameText">ゲスト</span>
         </div>
+
+        <!-- Settings Button -->
         <button class="btn-settings" id="btnOpenSettings" aria-label="設定">
           <span>⚙️</span>
           <span>設定</span>
@@ -1354,7 +1160,7 @@
       </div>
     </header>
 
-    <!-- Center Section: 3 Actions ("オンラインプレイ", "役職確認", "ショップ") -->
+    <!-- Center Section: 3 Actions -->
     <main class="center-section">
       <div class="game-hero">
         <h1 class="game-main-title">人狼</h1>
@@ -1364,19 +1170,19 @@
       <div class="main-actions-container">
         <!-- 1. オンラインプレイ -->
         <button class="btn-main-action btn-online-play" id="btnOnlinePlay">
-          <span class="btn-icon">⚔️</span>
+          <span>⚔️</span>
           <span>オンラインプレイ</span>
         </button>
 
         <!-- 2. 役職確認 -->
         <button class="btn-main-action btn-role-guide" id="btnRoleGuide">
-          <span class="btn-icon">📜</span>
+          <span>📜</span>
           <span>役職確認</span>
         </button>
 
         <!-- 3. ショップ (役職解放) -->
         <button class="btn-main-action btn-shop" id="btnOpenShop">
-          <span class="btn-icon">🛍️</span>
+          <span>🛍️</span>
           <span>役職ショップ</span>
         </button>
       </div>
@@ -1384,14 +1190,14 @@
 
   </div>
 
-  <!-- 1. Initial Nickname Setup Modal (Opens if no nickname is stored) -->
+  <!-- 1. Initial Nickname Setup Modal -->
   <div class="modal-overlay" id="initialNicknameModal">
     <div class="modal-card">
       <div class="modal-header">
         <h2 class="modal-title">🐺 ニックネームの決定</h2>
       </div>
-      <p style="font-size: 0.88rem; color: #cbd5e1; margin-bottom: 18px; line-height: 1.5;">
-        人狼ゲームへようこそ！ゲーム内で使用するニックネームを決めてください。
+      <p style="font-size: 0.88rem; color: var(--text-sub); margin-bottom: 18px; line-height: 1.5;">
+        人狼オンラインへようこそ！ゲーム内で使用するニックネームを決めてください。
       </p>
 
       <div class="form-group">
@@ -1421,7 +1227,7 @@
     </div>
   </div>
 
-  <!-- 2. Settings Modal (Change Nickname & VC Volume 50%~500%) -->
+  <!-- 2. Settings Modal (VC ON/OFF, Mic ON/OFF, Volume 50%~500%, Nickname) -->
   <div class="modal-overlay" id="settingsModal">
     <div class="modal-card">
       <div class="modal-header">
@@ -1429,7 +1235,7 @@
         <button class="btn-modal-close" id="btnCloseSettings" aria-label="閉じる">✕</button>
       </div>
 
-      <!-- Setting 1: Change Nickname (2~8 chars) -->
+      <!-- Setting 1: Change Nickname -->
       <div class="form-group">
         <label class="form-label" for="settingsNicknameInput">
           ニックネームの変更
@@ -1454,76 +1260,102 @@
         </button>
       </div>
 
-      <!-- Setting 2: VC Volume Control (50% ~ 500%) -->
-      <div class="form-group" style="margin-bottom: 12px;">
+      <!-- Setting 2: VC Enable/Disable (User request: default ON, togglable in settings) -->
+      <div class="form-group">
         <label class="form-label">
-          ボイスチャット (VC) 音量
-          <span class="form-label-desc">（50% 〜 500%）</span>
+          ボイスチャット (VC) 機能
+          <span class="form-label-desc">（初期設定: ON）</span>
         </label>
+        <div style="display: flex; gap: 8px; margin-top: 6px;">
+          <button class="btn-secondary" id="btnSettingsVcOn" style="flex: 1; font-weight: 800;">
+            🔊 VC: ON
+          </button>
+          <button class="btn-secondary" id="btnSettingsVcOff" style="flex: 1; font-weight: 800;">
+            🔇 VC: OFF (チャットモード)
+          </button>
+        </div>
+        <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px;">
+          ※ OFFにすると音声通話を停止し、画面左上のテキストチャットで会話します。
+        </div>
+      </div>
 
-        <div class="vc-volume-container">
-          <div class="volume-header-row">
-            <span style="font-size: 0.85rem; font-weight: 700; color: #e2e8f0;">現在の音量</span>
-            <div class="volume-value-badge">
-              <span id="vcVolumeDisplay">100</span>
-              <span class="volume-value-unit">%</span>
-            </div>
+      <!-- Setting 3: Mic ON/OFF -->
+      <div class="form-group">
+        <label class="form-label">
+          マイクの状態
+        </label>
+        <div style="display: flex; gap: 8px; margin-top: 6px;">
+          <button class="btn-secondary" id="btnSettingsMicOn" style="flex: 1; font-weight: 800;">
+            🎙️ マイク ON
+          </button>
+          <button class="btn-secondary" id="btnSettingsMicOff" style="flex: 1; font-weight: 800;">
+            🔇 ミュート (マイク OFF)
+          </button>
+        </div>
+      </div>
+
+      <!-- Setting 4: VC Volume Control (50% ~ 500%) -->
+      <div class="form-group" style="margin-bottom: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <label class="form-label" style="margin-bottom: 0;">
+            VC 音量
+            <span class="form-label-desc">（50% 〜 500%）</span>
+          </label>
+          <div style="font-size: 0.9rem; font-weight: 800; color: var(--sky);">
+            <span id="vcVolumeDisplay">100</span>%
           </div>
+        </div>
 
-          <!-- Slider 50% to 500% -->
-          <input 
-            type="range" 
-            id="vcVolumeSlider" 
-            class="range-slider" 
-            min="50" 
-            max="500" 
-            step="5" 
-            value="100" 
-          />
+        <input 
+          type="range" 
+          id="vcVolumeSlider" 
+          class="range-slider" 
+          min="50" 
+          max="500" 
+          step="5" 
+          value="100" 
+        />
 
-          <!-- Quick Preset Pills -->
-          <div class="preset-pills">
-            <button class="preset-pill" data-preset="50">50%</button>
-            <button class="preset-pill active" data-preset="100">100% (標準)</button>
-            <button class="preset-pill" data-preset="150">150%</button>
-            <button class="preset-pill" data-preset="200">200%</button>
-            <button class="preset-pill" data-preset="300">300%</button>
-            <button class="preset-pill" data-preset="500">500% (最大)</button>
-          </div>
+        <div class="preset-pills">
+          <button class="preset-pill" data-preset="50">50%</button>
+          <button class="preset-pill active" data-preset="100">100% (標準)</button>
+          <button class="preset-pill" data-preset="150">150%</button>
+          <button class="preset-pill" data-preset="200">200%</button>
+          <button class="preset-pill" data-preset="300">300%</button>
+          <button class="preset-pill" data-preset="500">500% (最大)</button>
+        </div>
 
-          <!-- VC Test Sound -->
-          <div class="vc-test-row">
-            <span>※ ボイスチャット実装時に自動適用されます</span>
-            <button class="btn-test-volume" id="btnTestVolume">🔊 音量テスト</button>
-          </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+          <span style="font-size: 0.75rem; color: var(--text-muted);">WebRTC音声に直接適用</span>
+          <button class="btn-secondary" id="btnTestVolume" style="padding: 6px 12px; font-size: 0.8rem;">
+            🔊 テスト再生
+          </button>
         </div>
       </div>
 
       <div class="modal-actions-bar">
-        <button class="btn-primary" id="btnFinishSettings">完了</button>
+        <button class="btn-primary" id="btnFinishSettings">設定を保存</button>
       </div>
     </div>
   </div>
 
   <!-- 3. Role Confirmation Guide Modal -->
   <div class="modal-overlay" id="roleGuideModal">
-    <div class="modal-card" style="max-width: 580px;">
+    <div class="modal-card" style="max-width: 560px;">
       <div class="modal-header">
         <h2 class="modal-title">📜 役職確認</h2>
         <button class="btn-modal-close" id="btnCloseRoleGuide" aria-label="閉じる">✕</button>
       </div>
 
-      <!-- Filter tabs -->
-      <div class="role-tabs">
-        <button class="role-tab active" data-camp="all">すべて</button>
-        <button class="role-tab" data-camp="villager">村人チーム</button>
-        <button class="role-tab" data-camp="werewolf">人狼チーム</button>
-        <button class="role-tab" data-camp="shop">ショップ開放役職</button>
+      <div style="display: flex; gap: 6px; margin-bottom: 14px; overflow-x: auto;">
+        <button class="preset-pill active" id="tabRoleAll" data-camp="all">すべて</button>
+        <button class="preset-pill" id="tabRoleVillager" data-camp="villager">村人チーム</button>
+        <button class="preset-pill" id="tabRoleWerewolf" data-camp="werewolf">人狼チーム</button>
+        <button class="preset-pill" id="tabRoleShop" data-camp="shop">ショップ開放役職</button>
       </div>
 
-      <!-- Role list container -->
       <div class="roles-list" id="rolesList">
-        <!-- Rendered via JavaScript -->
+        <!-- Rendered via JS -->
       </div>
 
       <div class="modal-actions-bar">
@@ -1532,32 +1364,23 @@
     </div>
   </div>
 
-  <!-- 4. Role Shop Modal (ショップ: 新たな役職を開放) -->
+  <!-- 4. Role Shop Modal -->
   <div class="modal-overlay" id="shopModal">
-    <div class="modal-card" style="max-width: 580px;">
+    <div class="modal-card" style="max-width: 560px;">
       <div class="modal-header">
         <h2 class="modal-title">🛍️ 役職ショップ</h2>
         <button class="btn-modal-close" id="btnCloseShop" aria-label="閉じる">✕</button>
       </div>
 
-      <!-- Coin balance banner -->
-      <div class="shop-balance-bar">
-        <div class="shop-coin-info">
-          <span style="font-size: 0.88rem; font-weight: 700; color: #94a3b8;">所持コイン:</span>
-          <div class="shop-coin-display">
-            <span class="coin-icon">🪙</span>
-            <span id="shopCoinsDisplay">0</span>
-            <span style="font-size: 0.85rem; color: #fbbf24; font-weight: 700;">コイン</span>
-          </div>
+      <div style="background: var(--gold-light); border: 1px solid rgba(217, 119, 6, 0.3); border-radius: 12px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+        <span style="font-weight: 700; color: #92400e; font-size: 0.9rem;">所持コイン</span>
+        <div style="font-size: 1.2rem; font-weight: 900; color: var(--gold);">
+          🪙 <span id="shopCoinsDisplay">0</span> C
         </div>
       </div>
-      <p style="font-size: 0.78rem; color: #94a3b8; margin: -4px 0 16px 2px;">
-        ※ コインを使用して新たな役職を開放できます（解放された役職は保存されます）
-      </p>
 
-      <!-- Shop items list -->
       <div class="shop-items-list" id="shopItemsList">
-        <!-- Rendered via JavaScript -->
+        <!-- Rendered via JS -->
       </div>
 
       <div class="modal-actions-bar">
@@ -1566,7 +1389,7 @@
     </div>
   </div>
 
-  <!-- 4. Online Play Hub / Lobby Modal -->
+  <!-- 5. Online Play Modal (Hub, Create, Waiting Room Lobby) -->
   <div class="modal-overlay" id="onlinePlayModal">
     <div class="modal-card">
       <div class="modal-header">
@@ -1576,28 +1399,27 @@
 
       <!-- View A: Selection (Create Room / Join Room) -->
       <div id="onlineHubView">
-        <p style="font-size: 0.88rem; color: #cbd5e1; margin-bottom: 16px;">
-          友達と部屋コードを共有して人狼をプレイできます。
+        <p style="font-size: 0.88rem; color: var(--text-sub); margin-bottom: 16px; line-height: 1.5;">
+          友達と部屋コードを共有して人狼をプレイできます。<br>
+          <span style="color: var(--crimson); font-weight: 700;">※ 最低3人からゲームを開始できます。</span>
         </p>
 
         <div class="online-grid">
-          <!-- Create Room Button Card -->
           <div class="online-action-box" id="btnCardCreateRoom">
             <span class="box-icon">🏠</span>
             <span class="box-title">部屋を作成</span>
-            <span class="box-desc">人数や役職構成を設定して部屋を開設</span>
+            <span class="box-desc">部屋を開設して待機室へ</span>
           </div>
 
-          <!-- Join Room Button Card -->
           <div class="online-action-box" id="btnCardShowJoinInput">
             <span class="box-icon">🚪</span>
             <span class="box-title">部屋に参加</span>
-            <span class="box-desc">部屋コードを入力して合流します</span>
+            <span class="box-desc">4桁コードを入力して合流</span>
           </div>
         </div>
 
-        <!-- Join Room Form (Toggled) -->
-        <div id="joinRoomForm" style="display: none; background: rgba(8, 12, 20, 0.7); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; margin-top: 10px;">
+        <!-- Join Form -->
+        <div id="joinRoomForm" style="display: none; background: #f8fafc; border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; margin-top: 10px;">
           <label class="form-label" for="roomCodeInput">4桁の部屋コード</label>
           <div style="display: flex; gap: 8px;">
             <input 
@@ -1610,7 +1432,7 @@
               inputmode="numeric"
               style="letter-spacing: 0.15em; font-weight: 800; font-size: 1.2rem; text-align: center;"
             />
-            <button class="btn-primary" id="btnJoinRoomSubmit" style="flex: 0 0 100px;">参加</button>
+            <button class="btn-primary" id="btnJoinRoomSubmit" style="flex: 0 0 90px;">参加</button>
           </div>
           <div class="input-error-msg" id="joinRoomErrorMsg" style="margin-top: 6px;"></div>
         </div>
@@ -1618,131 +1440,165 @@
 
       <!-- View B: Create Room Settings -->
       <div id="onlineCreateRoomView" style="display: none;">
-        <div class="create-room-panel">
-          <!-- 1. Player Count Selection (3 ~ 12) -->
-          <div class="panel-section">
-            <div class="section-title">
-              <span>👥 参加人数</span>
-              <span id="playerCountDisplay" style="color: var(--moon-gold); font-size: 1.1rem; font-weight: 900;">5人</span>
-            </div>
-            <input 
-              type="range" 
-              id="roomPlayerCountSlider" 
-              class="range-slider" 
-              min="3" 
-              max="12" 
-              step="1" 
-              value="5" 
-            />
-            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #94a3b8; margin-top: -6px;">
-              <span>最小 3人</span>
-              <span>標準 5〜8人</span>
-              <span>最大 12人</span>
-            </div>
+        <div class="form-group">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <label class="form-label" style="margin-bottom: 0;">👥 参加定員人数</label>
+            <span id="playerCountDisplay" style="color: var(--crimson); font-size: 1.1rem; font-weight: 900;">5人</span>
           </div>
-
-          <!-- 2. Role Configuration Mode (Normal vs Original) -->
-          <div class="panel-section">
-            <div class="section-title">
-              <span>🎭 入れる役職の設定</span>
-            </div>
-
-            <!-- Mode Tabs -->
-            <div class="mode-tab-buttons">
-              <button class="btn-mode-tab active" id="btnModeNormal" data-mode="normal">
-                <span>🌟 ノーマル (基本)</span>
-                <span style="font-size: 0.72rem; font-weight: 500; opacity: 0.85;">おすすめバランス配役</span>
-              </button>
-              <button class="btn-mode-tab" id="btnModeOriginal" data-mode="original">
-                <span>🛠️ オリジナル (自由)</span>
-                <span style="font-size: 0.72rem; font-weight: 500; opacity: 0.85;">役職を自由にカスタム</span>
-              </button>
-            </div>
-
-            <!-- Normal Mode Description & Preview -->
-            <div id="normalModeContainer">
-              <p style="font-size: 0.8rem; color: #cbd5e1; line-height: 1.5; margin-bottom: 8px;">
-                定員人数に応じて最適な役職が自動編成されます：
-              </p>
-              <div class="roles-preset-preview" id="normalRolesPreviewList">
-                <!-- Dynamically updated -->
-              </div>
-            </div>
-
-            <!-- Original Mode Custom Steppers -->
-            <div id="originalModeContainer" style="display: none;">
-              <p style="font-size: 0.78rem; color: #94a3b8; margin-bottom: 10px;">
-                ※ 人狼チームと市民チームの比率が約 <strong>2 : 8</strong> になるように調整してください。
-              </p>
-              
-              <div id="originalRolesSteppersList">
-                <!-- Dynamically populated -->
-              </div>
-
-              <!-- Ratio & Count Validation Indicator -->
-              <div class="ratio-indicator-box valid" id="originalValidationBox">
-                <div id="originalTotalCountNotice">合計役職数: 5 / 5人</div>
-                <div id="originalRatioNotice" style="font-size: 0.75rem; margin-top: 2px;">陣営バランス: 人狼チーム 1人 : 市民チーム 4人</div>
-              </div>
-            </div>
+          <input 
+            type="range" 
+            id="roomPlayerCountSlider" 
+            class="range-slider" 
+            min="3" 
+            max="12" 
+            step="1" 
+            value="5" 
+          />
+          <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-top: -4px;">
+            <span>最小 3人</span>
+            <span>標準 5〜8人</span>
+            <span>最大 12人</span>
           </div>
+        </div>
 
-          <!-- Modal Action Bar -->
-          <div class="modal-actions-bar" style="margin-top: 6px;">
-            <button class="btn-primary" id="btnConfirmCreateRoom">
-              🏠 部屋を作成して待機室へ
+        <!-- Mode selection -->
+        <div class="form-group">
+          <label class="form-label">配役モード</label>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-secondary" id="btnModeNormal" style="flex: 1; border-color: var(--crimson); color: var(--crimson); font-weight: 800;">
+              🌟 ノーマル (自動バランス)
             </button>
-            <button class="btn-secondary" id="btnCancelCreateRoom">戻る</button>
+            <button class="btn-secondary" id="btnModeOriginal" style="flex: 1; font-weight: 800;">
+              🛠️ カスタム
+            </button>
           </div>
+        </div>
+
+        <div class="modal-actions-bar">
+          <button class="btn-primary" id="btnConfirmCreateRoom">
+            🏠 部屋を作成して待機室へ
+          </button>
+          <button class="btn-secondary" id="btnCancelCreateRoom">戻る</button>
         </div>
       </div>
 
-      <!-- View C: Room Waiting Lobby (When inside a room) -->
+      <!-- View C: Room Waiting Lobby (ユーザー要望: 待機中の時点でVC可能、最低3人いないとはじめられない) -->
       <div id="onlineLobbyView" style="display: none; text-align: center;">
         
-        <!-- 4-digit room code badge -->
-        <div style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 2px;">4桁の部屋コード</div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 2px;">4桁の部屋コード</div>
         <div class="room-code-badge">
           <span id="lobbyRoomCodeText">#----</span>
           <button class="btn-copy-code" id="btnCopyRoomCode">コピー</button>
         </div>
 
-        <!-- Room Settings Summary Bar -->
-        <div class="room-settings-summary-bar">
-          <div style="display: flex; justify-content: space-between; font-weight: 800; margin-bottom: 4px; color: #fff;">
-            <span>📋 部屋設定 (<span id="lobbyModeText">ノーマル</span>)</span>
-            <span>定員: <span id="lobbyCapacityText">5</span>人</span>
-          </div>
-          <div id="lobbyRolesSummaryText" style="font-size: 0.78rem; color: #cbd5e1;">
-            配役: --
-          </div>
+        <!-- In-Room Voice & Mic Control Toolbar -->
+        <div class="room-voice-bar">
+          <button class="btn-voice-toggle active" id="btnLobbyVcToggle" title="ボイスチャットON/OFF">
+            <span id="lobbyVcIcon">🔊</span>
+            <span id="lobbyVcLabel">VC: ON</span>
+          </button>
+          <button class="btn-voice-toggle active" id="btnLobbyMicToggle" title="マイクON/OFF">
+            <span id="lobbyMicIcon">🎙️</span>
+            <span id="lobbyMicLabel">マイク: ON</span>
+          </button>
+          <span class="speaking-indicator-ring" id="lobbySpeakingRing" title="発話状態"></span>
+          <span style="font-size: 0.75rem; color: var(--text-muted); margin-left: auto;">待機中通話中</span>
         </div>
 
-        <!-- Invitation Box (Specific format requested by user) -->
+        <!-- Minimum 3 players required indicator -->
+        <div class="min-player-warning" id="lobbyMinPlayerWarning">
+          <span>⚠️</span>
+          <span id="lobbyMinPlayerNoticeText">ゲームを開始するには最低3人のプレイヤーが必要です（現在: 1/3人）</span>
+        </div>
+
+        <!-- Invitation Box -->
         <div class="lobby-invite-card">
-          <div class="invite-header-row">
-            <span class="invite-label">📢 友達を招待する</span>
-            <span style="font-size: 0.75rem; color: #94a3b8;">ワンタップで共有可能</span>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <span style="font-size: 0.85rem; font-weight: 800; color: var(--text-main);">📢 友達を招待</span>
+            <span style="font-size: 0.72rem; color: var(--text-muted);">ワンタップで共有</span>
           </div>
           <div class="invite-text-box" id="lobbyInvitePreviewText">https://ikuradou745-oss.github.io/zinnrou/
 〇〇が呼んでるよ！参加コードは〇〇だよ！</div>
-          <button class="btn-invite-copy" id="btnInviteShare">
-            <span>✉️ 招待メッセージをコピー / 送信</span>
+          <button class="btn-secondary" id="btnInviteShare" style="width: 100%; padding: 8px 12px; font-size: 0.82rem; font-weight: 800;">
+            ✉️ 招待メッセージをコピー / 送信
           </button>
         </div>
 
         <!-- Participants List -->
-        <div style="text-align: left; margin-bottom: 6px; font-size: 0.85rem; font-weight: 700; color: #94a3b8;">
-          参加プレイヤー (<span id="lobbyPlayerCount">1</span> / <span id="lobbyPlayerMax">5</span>人):
+        <div style="text-align: left; margin-bottom: 6px; font-size: 0.85rem; font-weight: 700; color: var(--text-sub);">
+          参加プレイヤー (<span id="lobbyPlayerCount">1</span> / <span id="lobbyPlayerMax">5</span>人 - 最低3人必要):
         </div>
         <div class="lobby-roster" id="lobbyPlayerRoster">
           <!-- Injected via JS -->
         </div>
 
         <div class="modal-actions-bar">
-          <button class="btn-primary" id="btnLobbyStartGame" style="display: none;">ゲームを開始する</button>
+          <!-- Start Button: Disabled when < 3 players -->
+          <button class="btn-primary" id="btnLobbyStartGame" disabled style="display: none;">
+            最低3人必要 (現在: 1/3人)
+          </button>
           <button class="btn-secondary" id="btnLeaveRoom">部屋を退出</button>
         </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 6. In-Game Screen (人狼ゲーム画面) -->
+  <div id="gameView">
+    <div class="game-top-bar">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-weight: 900; font-size: 1.1rem; color: var(--crimson);">🐺 人狼</span>
+        <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted);" id="gameDayCountText">1日目</span>
+      </div>
+
+      <div class="game-phase-badge night" id="gamePhaseBadge">
+        <span id="gamePhaseIcon">🌙</span>
+        <span id="gamePhaseText">夜の行動 (残り30秒)</span>
+      </div>
+
+      <!-- Quick Game Voice Controls -->
+      <div style="display: flex; gap: 6px; align-items: center;">
+        <button class="btn-voice-toggle active" id="btnGameVcToggle" style="padding: 4px 8px; font-size: 0.78rem;">
+          <span id="gameVcLabel">🔊 VC: ON</span>
+        </button>
+        <button class="btn-voice-toggle active" id="btnGameMicToggle" style="padding: 4px 8px; font-size: 0.78rem;">
+          <span id="gameMicLabel">🎙️ マイクON</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="game-board">
+      <!-- Secret Role Card for Local Player -->
+      <div class="my-secret-role-card" id="mySecretRoleCard">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-muted);">あなたの役職</span>
+          <span class="role-badge villager" id="myRoleCampBadge">村人チーム</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+          <span style="font-size: 2rem;" id="myRoleIcon">🧑‍🌾</span>
+          <div>
+            <div style="font-size: 1.2rem; font-weight: 900;" id="myRoleName">村人</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);" id="myRoleDesc">夜の行動はありません。昼の議論と投票で人狼を探し出してください。</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Prompt Banner -->
+      <div style="width: 100%; max-width: 680px; text-align: left; font-size: 0.88rem; font-weight: 800; color: var(--text-sub);" id="gameActionPrompt">
+        👥 プレイヤー一覧:
+      </div>
+
+      <!-- Players Grid -->
+      <div class="players-table-grid" id="gamePlayersGrid">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <!-- Game Actions Controls (e.g. Vote button, Next Phase button for host) -->
+      <div style="display: flex; gap: 10px; margin-top: 12px;" id="gameControlsRow">
+        <button class="btn-primary" id="btnHostNextPhase" style="display: none; padding: 10px 18px; font-size: 0.88rem;">
+          ⏩ 次のフェーズへ進む (ホスト)
+        </button>
       </div>
     </div>
   </div>

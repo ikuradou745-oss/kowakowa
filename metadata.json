@@ -1,7 +1,9 @@
 {
   "name": "人狼オンライン (Werewolf)",
   "description": "シンプルなGUIで楽しめるオンライン人狼ゲーム。ニックネーム設定、VC音量調整（50%〜500%）、オンラインプレイ、役職確認、役職解放ショップ機能を搭載。",
-  "requestFramePermissions": [],
+  "requestFramePermissions": [
+    "microphone"
+  ],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]
