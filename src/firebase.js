@@ -75,12 +75,22 @@ export async function fetchPlayerProfile(playerId) {
 }
 
 // Online Werewolf Room Management Helpers
-export async function createFirestoreRoom(roomCode, hostId, hostNickname) {
+export async function createFirestoreRoom(roomCode, hostId, hostNickname, settings = {}) {
   try {
     const roomRef = doc(db, "jinrou_rooms", roomCode);
+    const maxPlayers = Number(settings.maxPlayers) || 4;
+    const roleMode = settings.roleMode || 'normal';
+    const rolesConfig = settings.rolesConfig || {};
+    const rolesList = settings.rolesList || [];
+
     const roomData = {
       code: roomCode,
       hostId,
+      hostNickname,
+      maxPlayers,
+      roleMode,
+      rolesConfig,
+      rolesList,
       status: "waiting", // waiting | in_game | finished
       phase: "day", // day | vote | night
       dayCount: 1,
@@ -90,6 +100,7 @@ export async function createFirestoreRoom(roomCode, hostId, hostNickname) {
           id: hostId,
           nickname: hostNickname,
           isHost: true,
+          isLeader: true,
           role: null,
           isAlive: true,
           joinedAt: Date.now()
@@ -99,8 +110,8 @@ export async function createFirestoreRoom(roomCode, hostId, hostNickname) {
     await setDoc(roomRef, roomData);
     return roomData;
   } catch (err) {
-    console.warn("[Firebase] create room notice:", err);
-    return null;
+    console.warn("[Firebase] create room error:", err);
+    throw err;
   }
 }
 
@@ -109,15 +120,16 @@ export async function joinFirestoreRoom(roomCode, playerId, playerNickname) {
     const roomRef = doc(db, "jinrou_rooms", roomCode);
     const snap = await getDoc(roomRef);
     if (!snap.exists()) {
-      throw new Error("部屋が見つかりませんでした");
+      throw new Error("部屋（#" + roomCode + "）が見つかりませんでした。コードをご確認ください。");
     }
     const data = snap.data();
     if (data.status !== "waiting") {
-      throw new Error("この部屋は既にゲームが開始されています");
+      throw new Error("この部屋は既にゲームが開始されているか、終了しています。");
     }
     const playerEntries = Object.keys(data.players || {});
-    if (playerEntries.length >= 15) {
-      throw new Error("部屋が満員です（最大15名）");
+    const maxAllowed = data.maxPlayers || 12;
+    if (playerEntries.length >= maxAllowed && !data.players[playerId]) {
+      throw new Error(`部屋が満員です（定員: ${maxAllowed}人）`);
     }
 
     const updatedPlayers = {
@@ -125,7 +137,8 @@ export async function joinFirestoreRoom(roomCode, playerId, playerNickname) {
       [playerId]: {
         id: playerId,
         nickname: playerNickname,
-        isHost: false,
+        isHost: (data.hostId === playerId),
+        isLeader: (data.hostId === playerId),
         role: null,
         isAlive: true,
         joinedAt: Date.now()
@@ -180,6 +193,7 @@ export async function leaveFirestoreRoom(roomCode, playerId) {
         const remainingIds = Object.keys(players);
         hostId = remainingIds[0];
         players[hostId].isHost = true;
+        players[hostId].isLeader = true;
       }
       await updateDoc(roomRef, {
         hostId,

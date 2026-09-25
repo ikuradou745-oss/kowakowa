@@ -1029,6 +1029,242 @@
       border-radius: 4px;
     }
 
+    /* Leader crown badge */
+    .lobby-player-leader-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      background: rgba(251, 191, 36, 0.18);
+      border: 1px solid rgba(251, 191, 36, 0.6);
+      color: var(--moon-gold);
+      font-size: 0.72rem;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 6px;
+      text-shadow: 0 0 8px rgba(251, 191, 36, 0.4);
+    }
+
+    /* Invite Card Box */
+    .lobby-invite-card {
+      background: rgba(12, 18, 30, 0.85);
+      border: 1px dashed rgba(56, 189, 248, 0.4);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 16px;
+      text-align: left;
+    }
+
+    .invite-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .invite-label {
+      font-size: 0.84rem;
+      font-weight: 800;
+      color: #38bdf8;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .invite-text-box {
+      background: rgba(5, 8, 14, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      color: #f1f5f9;
+      margin-bottom: 10px;
+      user-select: text;
+      -webkit-user-select: text;
+      font-family: inherit;
+      white-space: pre-wrap;
+    }
+
+    .btn-invite-copy {
+      width: 100%;
+      background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+      color: #fff;
+      border: 1px solid rgba(56, 189, 248, 0.5);
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
+      transition: all 0.15s ease;
+    }
+
+    .btn-invite-copy:hover {
+      background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(2, 132, 199, 0.45);
+    }
+
+    .room-settings-summary-bar {
+      background: rgba(18, 24, 38, 0.7);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 0.82rem;
+      color: #cbd5e1;
+      margin-bottom: 14px;
+      text-align: left;
+      line-height: 1.5;
+    }
+
+    /* Create Room Form Styles */
+    .create-room-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .panel-section {
+      background: rgba(10, 15, 26, 0.7);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    .section-title {
+      font-size: 0.92rem;
+      font-weight: 800;
+      color: #e2e8f0;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .mode-tab-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .btn-mode-tab {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1.5px solid var(--border-color);
+      color: var(--text-muted);
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 0.86rem;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      transition: all 0.15s ease;
+    }
+
+    .btn-mode-tab.active {
+      background: rgba(225, 29, 72, 0.15);
+      border-color: var(--crimson);
+      color: #fff;
+    }
+
+    .btn-mode-tab:hover:not(.active) {
+      background: rgba(30, 41, 59, 0.8);
+      color: #fff;
+    }
+
+    .role-stepper-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 10px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      margin-bottom: 6px;
+    }
+
+    .role-stepper-ctrl {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-stepper {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: rgba(30, 41, 59, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #fff;
+      font-weight: 800;
+      font-size: 1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.1s;
+    }
+
+    .btn-stepper:hover {
+      background: var(--crimson);
+      border-color: var(--crimson);
+    }
+
+    .stepper-count {
+      min-width: 24px;
+      text-align: center;
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .roles-preset-preview {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .role-preview-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(18, 25, 42, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #e2e8f0;
+    }
+
+    .ratio-indicator-box {
+      border-radius: 8px;
+      padding: 8px 12px;
+      margin-top: 10px;
+      font-size: 0.8rem;
+      line-height: 1.45;
+    }
+
+    .ratio-indicator-box.valid {
+      background: rgba(34, 197, 94, 0.15);
+      border: 1px solid rgba(34, 197, 94, 0.4);
+      color: #4ade80;
+    }
+
+    .ratio-indicator-box.invalid {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #f87171;
+    }
+
     /* Toast Notification */
     .toast-msg {
       position: fixed;
@@ -1352,7 +1588,7 @@
           <div class="online-action-box" id="btnCardCreateRoom">
             <span class="box-icon">🏠</span>
             <span class="box-title">部屋を作成</span>
-            <span class="box-desc">ホストとして新しく部屋を開設します</span>
+            <span class="box-desc">人数や役職構成を設定して部屋を開設</span>
           </div>
 
           <!-- Join Room Button Card -->
@@ -1372,8 +1608,10 @@
               id="roomCodeInput" 
               class="text-input" 
               placeholder="例: 1234" 
-              maxlength="6" 
-              style="text-transform: uppercase; letter-spacing: 0.1em; font-weight: 800;"
+              maxlength="4" 
+              pattern="\d*"
+              inputmode="numeric"
+              style="letter-spacing: 0.15em; font-weight: 800; font-size: 1.2rem; text-align: center;"
             />
             <button class="btn-primary" id="btnJoinRoomSubmit" style="flex: 0 0 100px;">参加</button>
           </div>
@@ -1381,20 +1619,124 @@
         </div>
       </div>
 
-      <!-- View B: Room Waiting Lobby (When inside a room) -->
+      <!-- View B: Create Room Settings -->
+      <div id="onlineCreateRoomView" style="display: none;">
+        <div class="create-room-panel">
+          <!-- 1. Player Count Selection (3 ~ 12) -->
+          <div class="panel-section">
+            <div class="section-title">
+              <span>👥 参加人数</span>
+              <span id="playerCountDisplay" style="color: var(--moon-gold); font-size: 1.1rem; font-weight: 900;">5人</span>
+            </div>
+            <input 
+              type="range" 
+              id="roomPlayerCountSlider" 
+              class="range-slider" 
+              min="3" 
+              max="12" 
+              step="1" 
+              value="5" 
+            />
+            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #94a3b8; margin-top: -6px;">
+              <span>最小 3人</span>
+              <span>標準 5〜8人</span>
+              <span>最大 12人</span>
+            </div>
+          </div>
+
+          <!-- 2. Role Configuration Mode (Normal vs Original) -->
+          <div class="panel-section">
+            <div class="section-title">
+              <span>🎭 入れる役職の設定</span>
+            </div>
+
+            <!-- Mode Tabs -->
+            <div class="mode-tab-buttons">
+              <button class="btn-mode-tab active" id="btnModeNormal" data-mode="normal">
+                <span>🌟 ノーマル (基本)</span>
+                <span style="font-size: 0.72rem; font-weight: 500; opacity: 0.85;">おすすめバランス配役</span>
+              </button>
+              <button class="btn-mode-tab" id="btnModeOriginal" data-mode="original">
+                <span>🛠️ オリジナル (自由)</span>
+                <span style="font-size: 0.72rem; font-weight: 500; opacity: 0.85;">役職を自由にカスタム</span>
+              </button>
+            </div>
+
+            <!-- Normal Mode Description & Preview -->
+            <div id="normalModeContainer">
+              <p style="font-size: 0.8rem; color: #cbd5e1; line-height: 1.5; margin-bottom: 8px;">
+                定員人数に応じて最適な役職が自動編成されます：
+              </p>
+              <div class="roles-preset-preview" id="normalRolesPreviewList">
+                <!-- Dynamically updated -->
+              </div>
+            </div>
+
+            <!-- Original Mode Custom Steppers -->
+            <div id="originalModeContainer" style="display: none;">
+              <p style="font-size: 0.78rem; color: #94a3b8; margin-bottom: 10px;">
+                ※ 人狼チームと市民チームの比率が約 <strong>2 : 8</strong> になるように調整してください。
+              </p>
+              
+              <div id="originalRolesSteppersList">
+                <!-- Dynamically populated -->
+              </div>
+
+              <!-- Ratio & Count Validation Indicator -->
+              <div class="ratio-indicator-box valid" id="originalValidationBox">
+                <div id="originalTotalCountNotice">合計役職数: 5 / 5人</div>
+                <div id="originalRatioNotice" style="font-size: 0.75rem; margin-top: 2px;">陣営バランス: 人狼チーム 1人 : 市民チーム 4人</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Modal Action Bar -->
+          <div class="modal-actions-bar" style="margin-top: 6px;">
+            <button class="btn-primary" id="btnConfirmCreateRoom">
+              🏠 部屋を作成して待機室へ
+            </button>
+            <button class="btn-secondary" id="btnCancelCreateRoom">戻る</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- View C: Room Waiting Lobby (When inside a room) -->
       <div id="onlineLobbyView" style="display: none; text-align: center;">
-        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 4px;">部屋コード</div>
+        
+        <!-- 4-digit room code badge -->
+        <div style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 2px;">4桁の部屋コード</div>
         <div class="room-code-badge">
           <span id="lobbyRoomCodeText">#----</span>
           <button class="btn-copy-code" id="btnCopyRoomCode">コピー</button>
         </div>
 
-        <p style="font-size: 0.84rem; color: #cbd5e1; margin-bottom: 12px;">
-          参加者に部屋コードを教えてください（Firebaseリアルタイム同期）
-        </p>
+        <!-- Room Settings Summary Bar -->
+        <div class="room-settings-summary-bar">
+          <div style="display: flex; justify-content: space-between; font-weight: 800; margin-bottom: 4px; color: #fff;">
+            <span>📋 部屋設定 (<span id="lobbyModeText">ノーマル</span>)</span>
+            <span>定員: <span id="lobbyCapacityText">5</span>人</span>
+          </div>
+          <div id="lobbyRolesSummaryText" style="font-size: 0.78rem; color: #cbd5e1;">
+            配役: --
+          </div>
+        </div>
 
+        <!-- Invitation Box (Specific format requested by user) -->
+        <div class="lobby-invite-card">
+          <div class="invite-header-row">
+            <span class="invite-label">📢 友達を招待する</span>
+            <span style="font-size: 0.75rem; color: #94a3b8;">ワンタップで共有可能</span>
+          </div>
+          <div class="invite-text-box" id="lobbyInvitePreviewText">https://ikuradou745-oss.github.io/zinnrou/
+〇〇が呼んでるよ！参加コードは〇〇だよ！</div>
+          <button class="btn-invite-copy" id="btnInviteShare">
+            <span>✉️ 招待メッセージをコピー / 送信</span>
+          </button>
+        </div>
+
+        <!-- Participants List -->
         <div style="text-align: left; margin-bottom: 6px; font-size: 0.85rem; font-weight: 700; color: #94a3b8;">
-          参加プレイヤー (<span id="lobbyPlayerCount">1</span>人):
+          参加プレイヤー (<span id="lobbyPlayerCount">1</span> / <span id="lobbyPlayerMax">5</span>人):
         </div>
         <div class="lobby-roster" id="lobbyPlayerRoster">
           <!-- Injected via JS -->
