@@ -82,6 +82,36 @@ function generateRoomCode() {
   return code;
 }
 
+function getActiveRoomsSummary() {
+  const list = [];
+  for (const room of rooms.values()) {
+    list.push({
+      code: room.code,
+      hostNickname: room.hostNickname || 'ホスト',
+      playerCount: room.players.size,
+      maxPlayers: room.maxPlayers || 5,
+      roleMode: room.roleMode || 'normal',
+      discussionTime: room.discussionTime || 60,
+      status: room.status || 'waiting'
+    });
+  }
+  return list;
+}
+
+function broadcastActiveRoomsList() {
+  const payload = JSON.stringify({
+    type: 'ACTIVE_ROOMS_UPDATE',
+    payload: { rooms: getActiveRoomsSummary() }
+  });
+  if (typeof wss !== 'undefined' && wss && wss.clients) {
+    for (const client of wss.clients) {
+      if (client.readyState === WebSocket.OPEN) {
+        try { client.send(payload); } catch (e) {}
+      }
+    }
+  }
+}
+
 function getRoomSnapshot(room) {
   if (!room) return null;
   const playersObj = {};
@@ -98,6 +128,12 @@ function getRoomSnapshot(room) {
       joinedAt: p.joinedAt || Date.now()
     };
   }
+  const pendingRequestsArr = room.pendingRequests ? Array.from(room.pendingRequests.values()).map(r => ({
+    requesterId: r.requesterId,
+    nickname: r.nickname,
+    timestamp: r.timestamp
+  })) : [];
+
   return {
     code: room.code,
     hostId: room.hostId,
@@ -110,6 +146,7 @@ function getRoomSnapshot(room) {
     rolesList: room.rolesList || [],
     players: playersObj,
     playerCount: room.players.size,
+    pendingRequests: pendingRequestsArr,
     chatHistory: (room.chatHistory || []).slice(-30),
     game: room.game ? {
       phase: room.game.phase,
@@ -190,20 +227,7 @@ app.get('/api/health', (req, res) => {
 });
 
 app.get('/api/jinrou/rooms', (req, res) => {
-  const list = [];
-  for (const room of rooms.values()) {
-    if (room.status === 'waiting') {
-      list.push({
-        code: room.code,
-        hostNickname: room.hostNickname,
-        playerCount: room.players.size,
-        maxPlayers: room.maxPlayers,
-        roleMode: room.roleMode,
-        discussionTime: room.discussionTime
-      });
-    }
-  }
-  res.json({ rooms: list });
+  res.json({ rooms: getActiveRoomsSummary() });
 });
 
 app.get('/api/jinrou/rooms/:code', (req, res) => {
@@ -233,6 +257,7 @@ app.post('/api/jinrou/rooms', (req, res) => {
       rolesList: data.rolesList || [],
       players: new Map(),
       sockets: new Map(),
+      pendingRequests: new Map(),
       chatHistory: [],
       game: null,
       timerInterval: null
@@ -246,6 +271,7 @@ app.post('/api/jinrou/rooms', (req, res) => {
     if (data.roleMode) room.roleMode = data.roleMode;
     if (data.rolesConfig) room.rolesConfig = data.rolesConfig;
     if (data.rolesList) room.rolesList = data.rolesList;
+    if (!room.pendingRequests) room.pendingRequests = new Map();
   }
 
   room.players.set(hostId, {
@@ -261,6 +287,7 @@ app.post('/api/jinrou/rooms', (req, res) => {
 
   const snap = getRoomSnapshot(room);
   broadcastToRoom(code, { type: 'ROOM_UPDATE', payload: snap });
+  broadcastActiveRoomsList();
   res.json(snap);
 });
 
@@ -287,6 +314,7 @@ app.post('/api/jinrou/rooms/:code/join', (req, res) => {
 
   const snap = getRoomSnapshot(room);
   broadcastToRoom(cleanCode, { type: 'ROOM_UPDATE', payload: snap });
+  broadcastActiveRoomsList();
   res.json(snap);
 });
 
@@ -297,12 +325,14 @@ app.post('/api/jinrou/rooms/:code/leave', (req, res) => {
   if (room) {
     room.players.delete(playerId);
     room.sockets.delete(playerId);
+    if (room.pendingRequests) room.pendingRequests.delete(playerId);
     if (room.players.size === 0) {
       if (room.timerInterval) clearInterval(room.timerInterval);
       rooms.delete(cleanCode);
     } else {
       broadcastToRoom(cleanCode, { type: 'ROOM_UPDATE', payload: getRoomSnapshot(room) });
     }
+    broadcastActiveRoomsList();
   }
   res.json({ success: true });
 });
@@ -324,6 +354,14 @@ wss.on('connection', (ws) => {
       const { type, payload } = msg;
 
       switch (type) {
+        case 'GET_ACTIVE_ROOMS': {
+          ws.send(JSON.stringify({
+            type: 'ACTIVE_ROOMS_UPDATE',
+            payload: { rooms: getActiveRoomsSummary() }
+          }));
+          break;
+        }
+
         case 'CREATE_ROOM': {
           const code = (payload.code || generateRoomCode()).toString().replace(/^[#＃]/, '').trim();
           clientRoomCode = code;
@@ -343,6 +381,7 @@ wss.on('connection', (ws) => {
               rolesList: payload.rolesList || [],
               players: new Map(),
               sockets: new Map(),
+              pendingRequests: new Map(),
               chatHistory: [],
               game: null,
               timerInterval: null
@@ -356,6 +395,7 @@ wss.on('connection', (ws) => {
             if (payload.roleMode) room.roleMode = payload.roleMode;
             if (payload.rolesConfig) room.rolesConfig = payload.rolesConfig;
             if (payload.rolesList) room.rolesList = payload.rolesList;
+            if (!room.pendingRequests) room.pendingRequests = new Map();
           }
 
           room.players.set(payload.playerId, {
@@ -376,6 +416,7 @@ wss.on('connection', (ws) => {
             payload: snap
           }));
           broadcastToRoom(code, { type: 'ROOM_UPDATE', payload: snap });
+          broadcastActiveRoomsList();
           break;
         }
 
@@ -415,6 +456,7 @@ wss.on('connection', (ws) => {
             joinedAt: Date.now()
           });
           room.sockets.set(payload.playerId, ws);
+          if (room.pendingRequests) room.pendingRequests.delete(payload.playerId);
 
           const snap = getRoomSnapshot(room);
           ws.send(JSON.stringify({ type: 'ROOM_JOINED', payload: snap }));
@@ -428,6 +470,187 @@ wss.on('connection', (ws) => {
               isVcOn: payload.isVcOn !== false
             }
           }, ws);
+          broadcastActiveRoomsList();
+          break;
+        }
+
+        // --- Real-Time Join Request & Host Approval Flow ---
+        case 'REQUEST_JOIN_ROOM': {
+          const code = (payload.roomCode || payload.code || '').toString().replace(/^[#＃]/, '').trim();
+          const requesterId = payload.requesterId || payload.playerId;
+          const requesterNickname = payload.requesterNickname || payload.nickname || 'プレイヤー';
+          const isVcOn = payload.isVcOn !== false;
+
+          const room = rooms.get(code);
+          if (!room) {
+            return ws.send(JSON.stringify({
+              type: 'JOIN_REQUEST_ERROR',
+              payload: { message: `部屋（#${code}）が見つかりません。` }
+            }));
+          }
+          if (room.status !== 'waiting') {
+            return ws.send(JSON.stringify({
+              type: 'JOIN_REQUEST_ERROR',
+              payload: { message: 'この部屋は既にゲームが開始されているか終了しています。' }
+            }));
+          }
+          if (room.players.size >= (room.maxPlayers || 12) && !room.players.has(requesterId)) {
+            return ws.send(JSON.stringify({
+              type: 'JOIN_REQUEST_ERROR',
+              payload: { message: `部屋が満員です（定員: ${room.maxPlayers}人）` }
+            }));
+          }
+
+          // If requester is already host or member, immediately approve
+          if (room.hostId === requesterId || room.players.has(requesterId)) {
+            clientRoomCode = code;
+            clientPlayerId = requesterId;
+            room.players.set(requesterId, {
+              id: requesterId,
+              nickname: requesterNickname,
+              isHost: room.hostId === requesterId,
+              isAlive: true,
+              isVcOn,
+              isMuted: false,
+              isSpeaking: false,
+              joinedAt: Date.now()
+            });
+            room.sockets.set(requesterId, ws);
+            const snap = getRoomSnapshot(room);
+            ws.send(JSON.stringify({ type: 'JOIN_REQUEST_APPROVED', payload: snap }));
+            broadcastToRoom(code, { type: 'ROOM_UPDATE', payload: snap }, ws);
+            broadcastActiveRoomsList();
+            break;
+          }
+
+          if (!room.pendingRequests) room.pendingRequests = new Map();
+          room.pendingRequests.set(requesterId, {
+            requesterId,
+            nickname: requesterNickname,
+            isVcOn,
+            ws,
+            timestamp: Date.now()
+          });
+
+          ws._pendingRoomCode = code;
+          ws._pendingRequesterId = requesterId;
+
+          // Notify requester: request is waiting for host approval
+          ws.send(JSON.stringify({
+            type: 'JOIN_REQUEST_PENDING',
+            payload: {
+              roomCode: code,
+              hostNickname: room.hostNickname || 'ホスト',
+              message: `ホスト（${room.hostNickname || 'ホスト'}）に参加申請を送りました。承認をお待ちください...`
+            }
+          }));
+
+          // Notify host in real-time!
+          const hostWs = room.sockets.get(room.hostId);
+          if (hostWs && hostWs.readyState === WebSocket.OPEN) {
+            hostWs.send(JSON.stringify({
+              type: 'JOIN_REQUEST_RECEIVED',
+              payload: {
+                roomCode: code,
+                requesterId,
+                requesterNickname,
+                timestamp: Date.now()
+              }
+            }));
+          }
+
+          // Broadcast room update so host UI shows the pending request
+          broadcastToRoom(code, { type: 'ROOM_UPDATE', payload: getRoomSnapshot(room) });
+          break;
+        }
+
+        case 'RESPOND_JOIN_REQUEST': {
+          const code = (payload.roomCode || clientRoomCode || '').toString().replace(/^[#＃]/, '').trim();
+          const room = rooms.get(code);
+          if (!room) return;
+
+          if (room.hostId !== clientPlayerId) {
+            return ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: { message: '参加申請を操作できるのはホストのみです。' }
+            }));
+          }
+
+          const { requesterId, approved } = payload;
+          if (!room.pendingRequests || !room.pendingRequests.has(requesterId)) return;
+
+          const req = room.pendingRequests.get(requesterId);
+          room.pendingRequests.delete(requesterId);
+
+          if (approved) {
+            if (room.players.size >= (room.maxPlayers || 12)) {
+              if (req.ws && req.ws.readyState === WebSocket.OPEN) {
+                req.ws.send(JSON.stringify({
+                  type: 'JOIN_REQUEST_ERROR',
+                  payload: { message: '部屋が満員になったため入室できませんでした。' }
+                }));
+              }
+              broadcastToRoom(code, { type: 'ROOM_UPDATE', payload: getRoomSnapshot(room) });
+              return;
+            }
+
+            room.players.set(requesterId, {
+              id: requesterId,
+              nickname: req.nickname || 'プレイヤー',
+              isHost: false,
+              isAlive: true,
+              isVcOn: req.isVcOn !== false,
+              isMuted: false,
+              isSpeaking: false,
+              joinedAt: Date.now()
+            });
+
+            if (req.ws && req.ws.readyState === WebSocket.OPEN) {
+              room.sockets.set(requesterId, req.ws);
+              req.ws._clientRoomCode = code;
+              req.ws._clientPlayerId = requesterId;
+
+              const snap = getRoomSnapshot(room);
+              req.ws.send(JSON.stringify({
+                type: 'JOIN_REQUEST_APPROVED',
+                payload: snap
+              }));
+            }
+
+            const snap = getRoomSnapshot(room);
+            broadcastToRoom(code, { type: 'ROOM_UPDATE', payload: snap });
+            broadcastToRoom(code, {
+              type: 'PEER_JOINED',
+              payload: {
+                peerId: requesterId,
+                nickname: req.nickname,
+                isVcOn: req.isVcOn !== false
+              }
+            });
+            broadcastActiveRoomsList();
+          } else {
+            if (req.ws && req.ws.readyState === WebSocket.OPEN) {
+              req.ws.send(JSON.stringify({
+                type: 'JOIN_REQUEST_REJECTED',
+                payload: {
+                  roomCode: code,
+                  message: `ホスト（${room.hostNickname || 'ホスト'}）によって入室が見送られました。`
+                }
+              }));
+            }
+            broadcastToRoom(code, { type: 'ROOM_UPDATE', payload: getRoomSnapshot(room) });
+          }
+          break;
+        }
+
+        case 'CANCEL_JOIN_REQUEST': {
+          const code = (payload.roomCode || '').toString().replace(/^[#＃]/, '').trim();
+          const requesterId = payload.requesterId || clientPlayerId;
+          const room = rooms.get(code);
+          if (room && room.pendingRequests && room.pendingRequests.has(requesterId)) {
+            room.pendingRequests.delete(requesterId);
+            broadcastToRoom(code, { type: 'ROOM_UPDATE', payload: getRoomSnapshot(room) });
+          }
           break;
         }
 
@@ -467,6 +690,7 @@ wss.on('connection', (ws) => {
           }
 
           room.status = 'in_game';
+          broadcastActiveRoomsList();
           room.game = {
             phase: 'role_reveal', // 1. Secret role announcement first
             phaseTitle: '📜 役職告知・確認',
@@ -618,11 +842,23 @@ wss.on('connection', (ws) => {
 });
 
 function handleLeave(ws, roomCode, playerId) {
+  // If this socket was waiting on a pending join request in any room, cancel it
+  if (ws && ws._pendingRoomCode && ws._pendingRequesterId) {
+    const pRoom = rooms.get(ws._pendingRoomCode);
+    if (pRoom && pRoom.pendingRequests && pRoom.pendingRequests.has(ws._pendingRequesterId)) {
+      pRoom.pendingRequests.delete(ws._pendingRequesterId);
+      broadcastToRoom(ws._pendingRoomCode, { type: 'ROOM_UPDATE', payload: getRoomSnapshot(pRoom) });
+    }
+  }
+
   if (!roomCode || !rooms.has(roomCode)) return;
   const room = rooms.get(roomCode);
   room.sockets.delete(playerId);
   if (playerId) {
     room.players.delete(playerId);
+  }
+  if (room.pendingRequests && playerId) {
+    room.pendingRequests.delete(playerId);
   }
 
   if (room.players.size === 0) {
@@ -646,6 +882,7 @@ function handleLeave(ws, roomCode, playerId) {
     }
     broadcastToRoom(roomCode, { type: 'ROOM_UPDATE', payload: getRoomSnapshot(room) });
   }
+  broadcastActiveRoomsList();
 }
 
 // --- Authoritative Game Timer & State Machine ---

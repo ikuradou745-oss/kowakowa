@@ -254,14 +254,42 @@ const shopItemsList = document.getElementById('shopItemsList');
 const onlinePlayModal = document.getElementById('onlinePlayModal');
 const btnCloseOnlinePlay = document.getElementById('btnCloseOnlinePlay');
 const onlineHubView = document.getElementById('onlineHubView');
+const onlineJoinRoomView = document.getElementById('onlineJoinRoomView');
 const onlineCreateRoomView = document.getElementById('onlineCreateRoomView');
 const onlineLobbyView = document.getElementById('onlineLobbyView');
 const btnCardCreateRoom = document.getElementById('btnCardCreateRoom');
 const btnCardShowJoinInput = document.getElementById('btnCardShowJoinInput');
-const joinRoomForm = document.getElementById('joinRoomForm');
+const realtimeRoomsList = document.getElementById('realtimeRoomsList');
+const btnRefreshRoomsList = document.getElementById('btnRefreshRoomsList');
+const btnBackFromJoinRoom = document.getElementById('btnBackFromJoinRoom');
 const roomCodeInput = document.getElementById('roomCodeInput');
 const btnJoinRoomSubmit = document.getElementById('btnJoinRoomSubmit');
 const joinRoomErrorMsg = document.getElementById('joinRoomErrorMsg');
+
+// GUI Mode Switching Elements
+const btnGuiPc = document.getElementById('btnGuiPc');
+const btnGuiMobile = document.getElementById('btnGuiMobile');
+const btnSettingsGuiPc = document.getElementById('btnSettingsGuiPc');
+const btnSettingsGuiMobile = document.getElementById('btnSettingsGuiMobile');
+
+// Join Request Prompt & Waiting Modals
+const joinRequestPromptModal = document.getElementById('joinRequestPromptModal');
+const promptRequesterNickname = document.getElementById('promptRequesterNickname');
+const btnPromptApprove = document.getElementById('btnPromptApprove');
+const btnPromptReject = document.getElementById('btnPromptReject');
+
+const joinRequestWaitingModal = document.getElementById('joinRequestWaitingModal');
+const joinRequestWaitingDesc = document.getElementById('joinRequestWaitingDesc');
+const btnCancelJoinRequest = document.getElementById('btnCancelJoinRequest');
+
+const lobbyPendingRequestsSection = document.getElementById('lobbyPendingRequestsSection');
+const lobbyPendingCount = document.getElementById('lobbyPendingCount');
+const lobbyPendingRequestsList = document.getElementById('lobbyPendingRequestsList');
+
+let activeRoomsList = [];
+let pendingRequestRoomCode = null;
+let currentPromptRequest = null;
+let roomsPollingInterval = null;
 
 // Create Room Settings
 const roomPlayerCountSlider = document.getElementById('roomPlayerCountSlider');
@@ -365,6 +393,7 @@ function initWebSocket() {
 
     socket.onopen = () => {
       console.log('[WS] Connected');
+      socket.send(JSON.stringify({ type: 'GET_ACTIVE_ROOMS' }));
       if (activeRoomCode) {
         socket.send(JSON.stringify({
           type: 'JOIN_ROOM',
@@ -487,6 +516,57 @@ function handleSocketMessage(msg) {
     case 'ACTION_CONFIRMED': {
       sound.playClick();
       showToast('行動を選択しました');
+      break;
+    }
+    case 'ACTIVE_ROOMS_UPDATE': {
+      activeRoomsList = payload.rooms || [];
+      renderRealtimeRoomsList();
+      break;
+    }
+    case 'JOIN_REQUEST_PENDING': {
+      pendingRequestRoomCode = payload.roomCode;
+      if (joinRequestWaitingDesc) {
+        joinRequestWaitingDesc.innerHTML = `ホスト（<strong>${payload.hostNickname || 'ホスト'}</strong>）に部屋「#${payload.roomCode}」への参加申請を送信しました。<br>ホストが許可すると自動で部屋に入室します。`;
+      }
+      openModal(joinRequestWaitingModal);
+      renderRealtimeRoomsList();
+      break;
+    }
+    case 'JOIN_REQUEST_RECEIVED': {
+      sound.playClick();
+      currentPromptRequest = payload;
+      if (promptRequesterNickname) {
+        promptRequesterNickname.textContent = payload.requesterNickname || 'プレイヤー';
+      }
+      openModal(joinRequestPromptModal);
+      break;
+    }
+    case 'JOIN_REQUEST_APPROVED': {
+      pendingRequestRoomCode = null;
+      closeModal(joinRequestWaitingModal);
+      closeModal(onlinePlayModal);
+      sound.playSuccess();
+      showToast(`🎉 部屋 #${payload.code} に合流しました！`);
+      activeRoomCode = payload.code;
+      isHost = (payload.hostId === localPlayerId);
+      currentRoomData = payload;
+      enterLobbyView(payload.code, payload);
+      break;
+    }
+    case 'JOIN_REQUEST_REJECTED': {
+      pendingRequestRoomCode = null;
+      closeModal(joinRequestWaitingModal);
+      sound.playClick();
+      showToast(payload.message || '⚠️ ホストによって参加が見送られました');
+      renderRealtimeRoomsList();
+      break;
+    }
+    case 'JOIN_REQUEST_ERROR': {
+      pendingRequestRoomCode = null;
+      closeModal(joinRequestWaitingModal);
+      sound.playClick();
+      showToast(`⚠️ ${payload.message || '入室エラー'}`);
+      renderRealtimeRoomsList();
       break;
     }
     case 'ERROR': {
@@ -865,6 +945,55 @@ ${hostNick}が呼んでるよ！参加コードは${room.code}だよ！`;
 
   // Strict Rule: Minimum 3 players required to start!
   const isMeHost = (room.hostId === localPlayerId);
+
+  // Render Host Pending Requests
+  const pendingRequests = room.pendingRequests || [];
+  if (isMeHost && pendingRequests.length > 0 && lobbyPendingRequestsSection) {
+    lobbyPendingRequestsSection.style.display = 'block';
+    if (lobbyPendingCount) lobbyPendingCount.textContent = pendingRequests.length;
+    if (lobbyPendingRequestsList) {
+      lobbyPendingRequestsList.innerHTML = '';
+      pendingRequests.forEach((req) => {
+        const item = document.createElement('div');
+        item.className = 'pending-request-card';
+        item.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 1.1rem;">👤</span>
+            <div>
+              <span class="pending-requester-name">${req.nickname}</span>
+              <span style="font-size: 0.72rem; color: var(--text-muted); margin-left: 4px;">が参加を希望</span>
+            </div>
+          </div>
+          <div class="pending-actions">
+            <button class="btn-approve-sm" data-req-id="${req.requesterId}">許可</button>
+            <button class="btn-reject-sm" data-req-id="${req.requesterId}">拒否</button>
+          </div>
+        `;
+        item.querySelector('.btn-approve-sm').addEventListener('click', () => {
+          sound.playClick();
+          sendWs('RESPOND_JOIN_REQUEST', {
+            roomCode: activeRoomCode,
+            requesterId: req.requesterId,
+            approved: true
+          });
+          showToast(`「${req.nickname}」さんの参加を許可しました`);
+        });
+        item.querySelector('.btn-reject-sm').addEventListener('click', () => {
+          sound.playClick();
+          sendWs('RESPOND_JOIN_REQUEST', {
+            roomCode: activeRoomCode,
+            requesterId: req.requesterId,
+            approved: false
+          });
+          showToast(`「${req.nickname}」さんの参加を見送りました`);
+        });
+        lobbyPendingRequestsList.appendChild(item);
+      });
+    }
+  } else if (lobbyPendingRequestsSection) {
+    lobbyPendingRequestsSection.style.display = 'none';
+  }
+
   if (isMeHost) {
     btnLobbyStartGame.style.display = 'block';
     if (playerCount < 3) {
@@ -1319,55 +1448,235 @@ btnCancelCreateRoom.addEventListener('click', () => {
   onlineHubView.style.display = 'block';
 });
 
-btnCardShowJoinInput.addEventListener('click', () => {
-  const isHidden = joinRoomForm.style.display === 'none';
-  joinRoomForm.style.display = isHidden ? 'block' : 'none';
-  if (isHidden) {
-    roomCodeInput.focus();
-    loadActiveRooms();
+// --- GUI Mode Selector (スマホ用GUI / PC用GUI) ---
+let currentGuiMode = localStorage.getItem('jinrou_gui_mode') || 
+  ((window.innerWidth <= 768 || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) ? 'mobile' : 'pc');
+
+function applyGuiMode(mode, showNotification = false) {
+  currentGuiMode = mode === 'mobile' ? 'mobile' : 'pc';
+  localStorage.setItem('jinrou_gui_mode', currentGuiMode);
+
+  if (currentGuiMode === 'mobile') {
+    document.body.classList.add('gui-mobile');
+    document.body.classList.remove('gui-pc');
+    if (btnGuiMobile) btnGuiMobile.classList.add('active');
+    if (btnGuiPc) btnGuiPc.classList.remove('active');
+    if (btnSettingsGuiMobile) btnSettingsGuiMobile.classList.add('active');
+    if (btnSettingsGuiPc) btnSettingsGuiPc.classList.remove('active');
+  } else {
+    document.body.classList.add('gui-pc');
+    document.body.classList.remove('gui-mobile');
+    if (btnGuiPc) btnGuiPc.classList.add('active');
+    if (btnGuiMobile) btnGuiMobile.classList.remove('active');
+    if (btnSettingsGuiPc) btnSettingsGuiPc.classList.add('active');
+    if (btnSettingsGuiMobile) btnSettingsGuiMobile.classList.remove('active');
   }
+
+  if (showNotification) {
+    sound.playClick();
+    showToast(currentGuiMode === 'mobile' ? '📱 スマホ用GUIに切り替えました' : '💻 PC用GUIに切り替えました');
+  }
+}
+
+if (btnGuiPc) btnGuiPc.addEventListener('click', () => applyGuiMode('pc', true));
+if (btnGuiMobile) btnGuiMobile.addEventListener('click', () => applyGuiMode('mobile', true));
+if (btnSettingsGuiPc) btnSettingsGuiPc.addEventListener('click', () => applyGuiMode('pc', true));
+if (btnSettingsGuiMobile) btnSettingsGuiMobile.addEventListener('click', () => applyGuiMode('mobile', true));
+
+// --- Real-Time Rooms List View ---
+btnCardShowJoinInput.addEventListener('click', () => {
+  onlineHubView.style.display = 'none';
+  onlineJoinRoomView.style.display = 'block';
+  loadActiveRooms();
+  if (roomsPollingInterval) clearInterval(roomsPollingInterval);
+  roomsPollingInterval = setInterval(loadActiveRooms, 3000);
 });
 
+if (btnBackFromJoinRoom) {
+  btnBackFromJoinRoom.addEventListener('click', () => {
+    if (roomsPollingInterval) clearInterval(roomsPollingInterval);
+    onlineJoinRoomView.style.display = 'none';
+    onlineHubView.style.display = 'block';
+  });
+}
+
+if (btnRefreshRoomsList) {
+  btnRefreshRoomsList.addEventListener('click', () => {
+    sound.playClick();
+    loadActiveRooms();
+    showToast('部屋一覧を更新しました');
+  });
+}
+
 async function loadActiveRooms() {
-  const listEl = document.getElementById('activeRoomsList');
-  if (!listEl) return;
-  listEl.innerHTML = '<div style="font-size: 0.78rem; color: var(--text-muted); text-align: center; padding: 6px;">更新中...</div>';
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: 'GET_ACTIVE_ROOMS' }));
+  }
   try {
     const res = await fetch('/api/jinrou/rooms');
     if (res.ok) {
       const data = await res.json();
-      const rooms = data.rooms || [];
-      if (rooms.length === 0) {
-        listEl.innerHTML = '<div style="font-size: 0.78rem; color: var(--text-muted); text-align: center; padding: 6px;">現在募集中の部屋はありません</div>';
-        return;
-      }
-      listEl.innerHTML = '';
-      rooms.forEach(r => {
-        const item = document.createElement('div');
-        item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; padding: 6px 10px; font-size: 0.82rem;';
-        item.innerHTML = `
-          <div>
-            <span style="font-weight: 800; color: var(--crimson);">#${r.code}</span>
-            <span style="color: var(--text-sub); margin-left: 6px;">(${r.hostNickname || 'ホスト'}村)</span>
-            <span style="color: var(--text-muted); font-size: 0.72rem; margin-left: 4px;">${r.playerCount}/${r.maxPlayers}人</span>
-          </div>
-          <button class="btn-primary" style="padding: 4px 10px; font-size: 0.78rem;" data-join-code="${r.code}">参加</button>
-        `;
-        item.querySelector('button').addEventListener('click', () => {
-          roomCodeInput.value = r.code;
-          btnJoinRoomSubmit.click();
-        });
-        listEl.appendChild(item);
-      });
-      return;
+      activeRoomsList = data.rooms || [];
+      renderRealtimeRoomsList();
     }
-  } catch (e) {}
-  listEl.innerHTML = '<div style="font-size: 0.78rem; color: var(--text-muted); text-align: center; padding: 6px;">部屋コードを入力してご参加ください</div>';
+  } catch (e) {
+    console.warn('[Room List Fetch]', e);
+  }
 }
 
-const btnRefreshActiveRooms = document.getElementById('btnRefreshActiveRooms');
-if (btnRefreshActiveRooms) {
-  btnRefreshActiveRooms.addEventListener('click', loadActiveRooms);
+function renderRealtimeRoomsList() {
+  if (!realtimeRoomsList) return;
+
+  if (!activeRoomsList || activeRoomsList.length === 0) {
+    realtimeRoomsList.innerHTML = `
+      <div style="background: #ffffff; border: 1.5px dashed var(--border-color); border-radius: 14px; padding: 24px 16px; text-align: center;">
+        <div style="font-size: 2rem; margin-bottom: 6px;">🏕️</div>
+        <div style="font-weight: 800; font-size: 0.95rem; color: var(--text-main); margin-bottom: 4px;">現在作られている部屋はありません</div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px;">あなたが最初の部屋を作成するか、友達の開設をお待ちください。</div>
+        <button class="btn-primary" id="btnQuickCreateRoom" style="padding: 8px 18px; font-size: 0.85rem;">🏠 新しく部屋を作成する</button>
+      </div>
+    `;
+    const quickCreate = realtimeRoomsList.querySelector('#btnQuickCreateRoom');
+    if (quickCreate) {
+      quickCreate.addEventListener('click', () => {
+        onlineJoinRoomView.style.display = 'none';
+        onlineCreateRoomView.style.display = 'block';
+        updateCreateRoomUI();
+      });
+    }
+    return;
+  }
+
+  realtimeRoomsList.innerHTML = '';
+  activeRoomsList.forEach((r) => {
+    const card = document.createElement('div');
+    card.className = 'realtime-room-card';
+
+    const isFull = r.playerCount >= r.maxPlayers;
+    const isInGame = r.status === 'in_game';
+    const isPending = (pendingRequestRoomCode === r.code);
+
+    let statusBadgeClass = 'waiting';
+    let statusText = '🟢 募集中';
+    if (isInGame) {
+      statusBadgeClass = 'in_game';
+      statusText = '⚔️ 試合中';
+    } else if (isFull) {
+      statusBadgeClass = 'full';
+      statusText = '🔴 満員';
+    }
+
+    let actionButtonHtml = '';
+    if (isPending) {
+      actionButtonHtml = `<button class="btn-room-enter pending" data-room-code="${r.code}">⏳ 申請中 (許可待ち)</button>`;
+    } else if (isInGame) {
+      actionButtonHtml = `<button class="btn-room-enter" disabled>⚔️ 試合中</button>`;
+    } else if (isFull) {
+      actionButtonHtml = `<button class="btn-room-enter" disabled>🔴 満員</button>`;
+    } else {
+      actionButtonHtml = `<button class="btn-room-enter" data-room-code="${r.code}" data-host-name="${r.hostNickname || 'ホスト'}">その部屋に入る</button>`;
+    }
+
+    card.innerHTML = `
+      <div class="room-card-info">
+        <div class="room-card-header">
+          <span class="room-card-title">👑 ${r.hostNickname || 'ホスト'}さんの部屋</span>
+          <span class="room-code-chip">#${r.code}</span>
+          <span class="room-status-badge ${statusBadgeClass}">${statusText}</span>
+        </div>
+        <div class="room-card-meta">
+          <span>👥 ${r.playerCount} / ${r.maxPlayers}人 (最低3人)</span>
+          <span>⏱️ ${r.discussionTime || 60}秒</span>
+          <span>🎭 ${r.roleMode === 'original' ? 'カスタム配役' : 'ノーマル'}</span>
+        </div>
+      </div>
+      <div>
+        ${actionButtonHtml}
+      </div>
+    `;
+
+    const enterBtn = card.querySelector('.btn-room-enter:not(:disabled)');
+    if (enterBtn && !isPending) {
+      enterBtn.addEventListener('click', () => {
+        requestJoinRoom(r.code, r.hostNickname);
+      });
+    }
+
+    realtimeRoomsList.appendChild(card);
+  });
+}
+
+function requestJoinRoom(roomCode, hostNickname = 'ホスト') {
+  const cleanCode = (roomCode || '').toString().replace(/^[#＃]/, '').trim();
+  if (!cleanCode || !/^\d{4}$/.test(cleanCode)) {
+    showToast('⚠️ 4桁の部屋コードを確認してください');
+    return;
+  }
+
+  sound.playClick();
+  pendingRequestRoomCode = cleanCode;
+
+  // Send real-time join request to Host via WebSocket
+  sendWs('REQUEST_JOIN_ROOM', {
+    roomCode: cleanCode,
+    requesterId: localPlayerId,
+    requesterNickname: localNickname,
+    isVcOn: voiceManager.isVcEnabled
+  });
+
+  if (joinRequestWaitingDesc) {
+    joinRequestWaitingDesc.innerHTML = `ホスト（<strong>${hostNickname}</strong>）に部屋「#${cleanCode}」への参加申請を送信しました。<br>ホストが許可すると自動で部屋に入室します。`;
+  }
+  openModal(joinRequestWaitingModal);
+  renderRealtimeRoomsList();
+  showToast(`ホスト（${hostNickname}）に参加申請を送りました`);
+}
+
+// Host Response Modal Listeners
+if (btnPromptApprove) {
+  btnPromptApprove.addEventListener('click', () => {
+    if (!currentPromptRequest) return;
+    sound.playClick();
+    sendWs('RESPOND_JOIN_REQUEST', {
+      roomCode: activeRoomCode,
+      requesterId: currentPromptRequest.requesterId,
+      approved: true
+    });
+    closeModal(joinRequestPromptModal);
+    showToast(`「${currentPromptRequest.requesterNickname}」さんの参加を許可しました`);
+    currentPromptRequest = null;
+  });
+}
+
+if (btnPromptReject) {
+  btnPromptReject.addEventListener('click', () => {
+    if (!currentPromptRequest) return;
+    sound.playClick();
+    sendWs('RESPOND_JOIN_REQUEST', {
+      roomCode: activeRoomCode,
+      requesterId: currentPromptRequest.requesterId,
+      approved: false
+    });
+    closeModal(joinRequestPromptModal);
+    showToast(`「${currentPromptRequest.requesterNickname}」さんの参加を見送りました`);
+    currentPromptRequest = null;
+  });
+}
+
+if (btnCancelJoinRequest) {
+  btnCancelJoinRequest.addEventListener('click', () => {
+    sound.playClick();
+    if (pendingRequestRoomCode) {
+      sendWs('CANCEL_JOIN_REQUEST', {
+        roomCode: pendingRequestRoomCode,
+        requesterId: localPlayerId
+      });
+      pendingRequestRoomCode = null;
+    }
+    closeModal(joinRequestWaitingModal);
+    renderRealtimeRoomsList();
+    showToast('参加申請をキャンセルしました');
+  });
 }
 
 roomCodeInput.addEventListener('keydown', (e) => {
@@ -1429,7 +1738,7 @@ btnConfirmCreateRoom.addEventListener('click', async () => {
 });
 
 // Join Room Action (Supports #1234, full-width digits, spaces, and direct code)
-btnJoinRoomSubmit.addEventListener('click', async () => {
+btnJoinRoomSubmit.addEventListener('click', () => {
   const rawVal = (roomCodeInput.value || '').trim();
   // Strip any leading # or ＃, remove spaces, convert Japanese full-width digits to half-width
   const code = rawVal
@@ -1443,31 +1752,9 @@ btnJoinRoomSubmit.addEventListener('click', async () => {
     return;
   }
   joinRoomErrorMsg.classList.remove('visible');
-  btnJoinRoomSubmit.disabled = true;
 
-  try {
-    showToast(`部屋 #${code} に参加中...`);
-    const roomData = await joinFirestoreRoom(code, localPlayerId, localNickname);
-
-    activeRoomCode = code;
-    isHost = (roomData.hostId === localPlayerId);
-    enterLobbyView(code, roomData);
-
-    sendWs('JOIN_ROOM', {
-      code,
-      playerId: localPlayerId,
-      nickname: localNickname,
-      isVcOn: voiceManager.isVcEnabled
-    });
-
-    showToast(`部屋 #${code} に合流しました！`);
-  } catch (err) {
-    joinRoomErrorMsg.textContent = err.message || '部屋が見つかりませんでした';
-    joinRoomErrorMsg.classList.add('visible');
-    showToast('参加失敗: ' + (err.message || '部屋が見つかりませんでした'));
-  } finally {
-    btnJoinRoomSubmit.disabled = false;
-  }
+  // Trigger real-time join request flow to Host
+  requestJoinRoom(code, 'ホスト');
 });
 
 btnCopyRoomCode.addEventListener('click', () => {
@@ -1529,9 +1816,11 @@ btnConfirmInitialNickname.addEventListener('click', () => {
 
 // App Initialization
 function initApp() {
+  applyGuiMode(currentGuiMode, false);
   updateCoinsDisplay();
   updateVcVolumeUI(vcVolume);
   setVcState(true); // VC ON by default
+  loadActiveRooms();
 
   if (!localNickname || !validateNickname(localNickname)) {
     openModal(initialNicknameModal);
@@ -1543,9 +1832,11 @@ function initApp() {
   const urlParams = new URLSearchParams(window.location.search);
   const roomParam = urlParams.get('room');
   if (roomParam && /^\d{4}$/.test(roomParam)) {
-    roomCodeInput.value = roomParam;
+    if (roomCodeInput) roomCodeInput.value = roomParam;
+    onlineHubView.style.display = 'none';
+    onlineJoinRoomView.style.display = 'block';
     openModal(onlinePlayModal);
-    joinRoomForm.style.display = 'block';
+    requestJoinRoom(roomParam, 'ホスト');
   }
 }
 

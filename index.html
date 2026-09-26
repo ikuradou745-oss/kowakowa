@@ -966,6 +966,362 @@
       transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .toast-msg.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+    /* --- GUI Mode Switcher --- */
+    .gui-segmented-ctrl {
+      display: inline-flex;
+      align-items: center;
+      background: #f1f5f9;
+      border: 1px solid var(--border-color);
+      border-radius: 9999px;
+      padding: 3px;
+      gap: 2px;
+      box-shadow: var(--shadow-sm);
+    }
+    .btn-gui-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: transparent;
+      border: none;
+      border-radius: 9999px;
+      padding: 5px 12px;
+      font-size: 0.8rem;
+      font-weight: 800;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .btn-gui-toggle:hover {
+      color: var(--text-main);
+    }
+    .btn-gui-toggle.active {
+      background: #ffffff;
+      color: var(--sky);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    /* --- Live Pulse Indicator --- */
+    .live-pulse-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+      animation: pulseGreen 1.8s infinite;
+    }
+    @keyframes pulseGreen {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    /* --- Real-Time Rooms Container & Cards --- */
+    .realtime-rooms-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 280px;
+      overflow-y: auto;
+      padding: 2px;
+    }
+    .realtime-room-card {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #ffffff;
+      border: 1.5px solid var(--border-color);
+      border-radius: 14px;
+      padding: 12px 14px;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s ease;
+      gap: 12px;
+    }
+    .realtime-room-card:hover {
+      border-color: var(--sky);
+      box-shadow: var(--shadow-md);
+      transform: translateY(-1px);
+    }
+    .room-card-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      text-align: left;
+      flex: 1;
+      min-width: 0;
+    }
+    .room-card-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .room-card-title {
+      font-weight: 800;
+      font-size: 0.95rem;
+      color: var(--text-main);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .room-code-chip {
+      background: #f1f5f9;
+      color: var(--crimson);
+      font-weight: 900;
+      font-size: 0.78rem;
+      padding: 2px 7px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      font-family: monospace;
+    }
+    .room-card-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.78rem;
+      color: var(--text-sub);
+      flex-wrap: wrap;
+    }
+    .room-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-size: 0.72rem;
+      font-weight: 800;
+    }
+    .room-status-badge.waiting { background: var(--emerald-light); color: var(--emerald); }
+    .room-status-badge.in_game { background: #fef3c7; color: #b45309; }
+    .room-status-badge.full { background: #fee2e2; color: #b91c1c; }
+
+    .btn-room-enter {
+      padding: 9px 16px;
+      font-size: 0.88rem;
+      font-weight: 800;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+      background: var(--crimson);
+      color: #ffffff;
+      box-shadow: var(--shadow-sm);
+    }
+    .btn-room-enter:hover:not(:disabled) {
+      background: var(--crimson-hover);
+      transform: scale(1.02);
+    }
+    .btn-room-enter:disabled {
+      background: #cbd5e1;
+      color: #64748b;
+      cursor: not-allowed;
+    }
+    .btn-room-enter.pending {
+      background: #f59e0b;
+      color: #ffffff;
+      animation: pulseAmber 1.5s infinite;
+    }
+    @keyframes pulseAmber {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    /* --- Lobby Pending Requests Section for Host --- */
+    .lobby-pending-box {
+      background: #fff1f2;
+      border: 1.5px solid rgba(225, 29, 72, 0.3);
+      border-radius: 14px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      text-align: left;
+      animation: fadeInScale 0.25s ease;
+    }
+    .pending-request-card {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #ffffff;
+      border: 1px solid rgba(225, 29, 72, 0.2);
+      border-radius: 10px;
+      padding: 8px 12px;
+      margin-top: 6px;
+      gap: 10px;
+    }
+    .pending-requester-name {
+      font-weight: 800;
+      font-size: 0.9rem;
+      color: var(--text-main);
+    }
+    .pending-actions {
+      display: flex;
+      gap: 6px;
+    }
+    .btn-approve-sm {
+      background: var(--emerald);
+      color: #ffffff;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-weight: 800;
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-approve-sm:hover { background: #047857; }
+    .btn-reject-sm {
+      background: #f1f5f9;
+      color: var(--crimson);
+      border: 1px solid var(--border-color);
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-reject-sm:hover { background: #fee2e2; }
+
+    /* ========================================================= */
+    /* Mode-Specific GUI Styles: Mobile (スマホ) vs PC          */
+    /* ========================================================= */
+
+    /* --- PC Mode Specifics (`gui-pc`) --- */
+    body.gui-pc .top-bar {
+      padding: 16px 32px;
+    }
+    body.gui-pc .modal-card {
+      max-width: 600px;
+      border-radius: 20px;
+    }
+    body.gui-pc .top-left-chat-container {
+      width: 340px;
+      top: 80px;
+      left: 24px;
+    }
+    body.gui-pc .players-table-grid {
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 14px;
+    }
+    body.gui-pc .btn-primary,
+    body.gui-pc .btn-secondary,
+    body.gui-pc .btn-main-action {
+      transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.15s ease;
+    }
+    body.gui-pc .btn-main-action:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+    }
+    body.gui-pc .keyboard-hint {
+      display: inline-block;
+      font-size: 0.7rem;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: #f1f5f9;
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
+      margin-left: 4px;
+      font-family: monospace;
+    }
+
+    /* --- Mobile Mode Specifics (`gui-mobile`) --- */
+    body.gui-mobile {
+      font-size: 15px;
+    }
+    body.gui-mobile .top-bar {
+      padding: 10px 14px;
+      gap: 6px;
+    }
+    body.gui-mobile .brand-logo {
+      font-size: 1.15rem;
+    }
+    body.gui-mobile .brand-logo .wolf-icon {
+      font-size: 1.35rem;
+    }
+    body.gui-mobile .top-right-bar {
+      gap: 6px;
+    }
+    body.gui-mobile .coins-chip {
+      padding: 5px 10px;
+      font-size: 0.8rem;
+    }
+    body.gui-mobile .nickname-chip {
+      padding: 5px 10px;
+      font-size: 0.8rem;
+    }
+    body.gui-mobile .nickname-chip .nick-text {
+      max-width: 65px;
+    }
+    body.gui-mobile .btn-settings {
+      padding: 5px 10px;
+      font-size: 0.8rem;
+    }
+    body.gui-mobile .btn-gui-toggle {
+      padding: 4px 8px;
+      font-size: 0.74rem;
+    }
+    body.gui-mobile .gui-btn-label {
+      font-size: 0.72rem;
+    }
+    body.gui-mobile .modal-card {
+      width: 95vw;
+      max-width: 95vw;
+      max-height: 88vh;
+      padding: 18px 16px;
+      border-radius: 20px;
+    }
+    body.gui-mobile .top-left-chat-container {
+      top: auto;
+      bottom: 12px;
+      left: 10px;
+      width: calc(100vw - 20px);
+      max-width: 380px;
+      border-radius: 14px;
+    }
+    body.gui-mobile .chat-messages-box {
+      height: 100px;
+    }
+    body.gui-mobile .chat-text-input {
+      font-size: 16px; /* prevent iOS auto-zoom */
+    }
+    body.gui-mobile .text-input {
+      font-size: 16px; /* prevent iOS auto-zoom */
+      padding: 12px 14px;
+    }
+    body.gui-mobile .btn-primary, 
+    body.gui-mobile .btn-secondary {
+      min-height: 48px; /* touch friendly 48px minimum */
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.95rem;
+    }
+    body.gui-mobile .btn-main-action {
+      min-height: 60px;
+      padding: 14px 18px;
+      font-size: 1rem;
+    }
+    body.gui-mobile .players-table-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+    body.gui-mobile .game-player-card {
+      padding: 10px 6px;
+    }
+    body.gui-mobile .btn-target-select {
+      min-height: 42px;
+      font-size: 0.85rem;
+    }
+    body.gui-mobile .realtime-room-card {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+    }
+    body.gui-mobile .btn-room-enter {
+      width: 100%;
+      min-height: 44px;
+    }
   </style>
 </head>
 <body>
@@ -1023,6 +1379,16 @@
       </div>
 
       <div class="top-right-bar">
+        <!-- GUI Mode Switcher (スマホ用 / PC用) -->
+        <div class="gui-segmented-ctrl" id="headerGuiSwitch" role="group" aria-label="GUI表示切替">
+          <button type="button" class="btn-gui-toggle active" id="btnGuiPc" title="PC用GUIに切り替え">
+            <span>💻</span><span class="gui-btn-label">PC</span>
+          </button>
+          <button type="button" class="btn-gui-toggle" id="btnGuiMobile" title="スマホ用GUIに切り替え">
+            <span>📱</span><span class="gui-btn-label">スマホ</span>
+          </button>
+        </div>
+
         <div class="coins-chip" id="topCoinsChip" title="役職ショップを開く">
           <span class="coin-icon">🪙</span>
           <span id="topCoinsDisplay">0</span>
@@ -1135,6 +1501,21 @@
         <button class="btn-secondary" id="btnSaveNickname" style="width: 100%; padding: 8px 14px; font-size: 0.88rem; margin-top: 6px;">
           ニックネームを変更
         </button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">
+          GUI表示モード
+          <span class="form-label-desc">（PC用 / スマホ用の表示切替）</span>
+        </label>
+        <div style="display: flex; gap: 8px; margin-top: 6px;">
+          <button type="button" class="btn-secondary" id="btnSettingsGuiPc" style="flex: 1; font-weight: 800;">
+            💻 PC用GUI
+          </button>
+          <button type="button" class="btn-secondary" id="btnSettingsGuiMobile" style="flex: 1; font-weight: 800;">
+            📱 スマホ用GUI
+          </button>
+        </div>
       </div>
 
       <div class="form-group">
@@ -1278,13 +1659,45 @@
 
           <div class="online-action-box" id="btnCardShowJoinInput">
             <span class="box-icon">🚪</span>
-            <span class="box-title">部屋に参加</span>
-            <span class="box-desc">4桁コードを入力して合流</span>
+            <span class="box-title">部屋に入る (リアルタイム)</span>
+            <span class="box-desc">作られている部屋を見て申請・入室</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- View: Real-Time Active Rooms List & Join (ユーザー要望: 現在作られている部屋を見る、その部屋に入るボタンでホストに通知、許可されたら入室) -->
+      <div id="onlineJoinRoomView" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <div>
+            <h3 style="font-size: 1.05rem; font-weight: 900; color: var(--text-main); margin-bottom: 2px;">
+              🌐 現在作られている部屋一覧
+            </h3>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span class="live-pulse-dot"></span>
+              <span style="font-size: 0.74rem; color: var(--emerald); font-weight: 800;">リアルタイム待受中</span>
+            </div>
+          </div>
+          <button type="button" class="btn-secondary" id="btnRefreshRoomsList" style="padding: 6px 12px; font-size: 0.8rem; font-weight: 800;">
+            🔄 最新に更新
+          </button>
+        </div>
+
+        <p style="font-size: 0.82rem; color: var(--text-sub); line-height: 1.5; margin-bottom: 12px;">
+          参加したい部屋の「その部屋に入る」を押してください。<br>
+          ホストに通知が届き、許可されると自動で入室できます。
+        </p>
+
+        <div id="realtimeRoomsList" class="realtime-rooms-container">
+          <div style="font-size: 0.82rem; color: var(--text-muted); text-align: center; padding: 24px;">
+            部屋情報を取得中...
           </div>
         </div>
 
-        <div id="joinRoomForm" style="display: none; background: #f8fafc; border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; margin-top: 10px;">
-          <label class="form-label" for="roomCodeInput">4桁の部屋コードを入力</label>
+        <!-- Direct Room Code Input Option -->
+        <div style="margin-top: 14px; border-top: 1px dashed var(--border-color); padding-top: 12px;">
+          <div style="font-size: 0.82rem; font-weight: 800; color: var(--text-sub); margin-bottom: 6px;">
+            🔍 部屋コードを直接入力して参加申請
+          </div>
           <div style="display: flex; gap: 8px;">
             <input 
               type="text" 
@@ -1296,23 +1709,16 @@
               inputmode="numeric"
               style="letter-spacing: 0.12em; font-weight: 800; font-size: 1.15rem; text-align: center;"
             />
-            <button class="btn-primary" id="btnJoinRoomSubmit" style="flex: 0 0 90px;">参加</button>
+            <button class="btn-primary" id="btnJoinRoomSubmit" style="flex: 0 0 110px; font-weight: 800;">申請する</button>
           </div>
-          <div style="font-size: 0.76rem; color: var(--text-muted); margin-top: 5px;">
-            ※「#1234」のように#やスペースが付いていても自動認識されます
+          <div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 4px;">
+            ※「#1234」のように#や全角数字が付いていても自動認識されます
           </div>
           <div class="input-error-msg" id="joinRoomErrorMsg" style="margin-top: 6px;"></div>
+        </div>
 
-          <!-- Active Rooms List -->
-          <div style="margin-top: 14px; border-top: 1px dashed var(--border-color); padding-top: 10px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <span style="font-size: 0.8rem; font-weight: 800; color: var(--text-sub);">🌐 現在募集中の部屋一覧</span>
-              <button id="btnRefreshActiveRooms" type="button" class="btn-secondary" style="padding: 2px 8px; font-size: 0.72rem;">🔄 更新</button>
-            </div>
-            <div id="activeRoomsList" style="display: flex; flex-direction: column; gap: 6px; max-height: 140px; overflow-y: auto;">
-              <div style="font-size: 0.78rem; color: var(--text-muted); text-align: center; padding: 8px;">部屋コードを入力するか、一覧から選択してください</div>
-            </div>
-          </div>
+        <div class="modal-actions-bar" style="margin-top: 16px;">
+          <button class="btn-secondary" id="btnBackFromJoinRoom" style="width: 100%;">戻る</button>
         </div>
       </div>
 
@@ -1436,6 +1842,17 @@
           <span id="lobbyMinPlayerNoticeText">ゲームを開始するには最低3人のプレイヤーが必要です（現在: 1/3人）</span>
         </div>
 
+        <!-- Host Pending Requests Box (ユーザー要望: その部屋に入るを押すとホスト側に通知が入り、許可されたら入れます) -->
+        <div class="lobby-pending-box" id="lobbyPendingRequestsSection" style="display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="font-size: 0.85rem; font-weight: 900; color: var(--crimson);">
+              🔔 参加申請 (<span id="lobbyPendingCount">0</span>件)
+            </span>
+            <span style="font-size: 0.72rem; color: var(--text-muted);">許可すると入室します</span>
+          </div>
+          <div id="lobbyPendingRequestsList" style="display: flex; flex-direction: column; gap: 6px;"></div>
+        </div>
+
         <div class="lobby-invite-card">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
             <span style="font-size: 0.85rem; font-weight: 800; color: var(--text-main);">📢 友達を招待</span>
@@ -1461,6 +1878,43 @@
         </div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- Host Join Request Pop-up Modal (ユーザー要望: 許可されたら入れます) -->
+  <div class="modal-overlay" id="joinRequestPromptModal">
+    <div class="modal-card" style="max-width: 440px; text-align: center;">
+      <div style="font-size: 2.8rem; margin-bottom: 6px;">🔔</div>
+      <h3 style="font-size: 1.25rem; font-weight: 900; color: var(--text-main); margin-bottom: 6px;">
+        部屋への参加申請
+      </h3>
+      <p style="font-size: 0.95rem; color: var(--text-sub); line-height: 1.6; margin-bottom: 20px;">
+        「<strong id="promptRequesterNickname" style="color: var(--sky); font-size: 1.1rem;">プレイヤー</strong>」さんが部屋への参加を希望しています。<br>
+        入室を許可しますか？
+      </p>
+      <div style="display: flex; gap: 10px;">
+        <button type="button" class="btn-primary" id="btnPromptApprove" style="flex: 1; padding: 12px; font-weight: 900; background: var(--emerald);">
+          ✅ 許可する
+        </button>
+        <button type="button" class="btn-secondary" id="btnPromptReject" style="flex: 1; padding: 12px; font-weight: 800; color: var(--crimson); border-color: rgba(225,29,72,0.3);">
+          ❌ 拒否する
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Requester Join Request Waiting Modal -->
+  <div class="modal-overlay" id="joinRequestWaitingModal">
+    <div class="modal-card" style="max-width: 420px; text-align: center;">
+      <div style="font-size: 3rem; margin-bottom: 10px; animation: floatPulse 2s infinite ease-in-out;">⏳</div>
+      <h3 style="font-size: 1.2rem; font-weight: 900; margin-bottom: 8px;">ホストの許可をお待ちください</h3>
+      <p style="font-size: 0.88rem; color: var(--text-sub); line-height: 1.6; margin-bottom: 18px;" id="joinRequestWaitingDesc">
+        ホストに部屋への入室申請を送信しました。<br>
+        ホストが許可すると自動で部屋に入室します。
+      </p>
+      <button type="button" class="btn-secondary" id="btnCancelJoinRequest" style="width: 100%;">
+        申請をキャンセル
+      </button>
     </div>
   </div>
 
