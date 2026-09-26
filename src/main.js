@@ -7,7 +7,9 @@ import {
   joinFirestoreRoom, 
   leaveFirestoreRoom,
   subscribeToRoom,
-  fetchActiveFirestoreRooms
+  fetchActiveFirestoreRooms,
+  subscribeToActiveRooms,
+  updatePlayerHeartbeat
 } from './firebase.js';
 
 // --- State Variables ---
@@ -520,8 +522,9 @@ function handleSocketMessage(msg) {
       break;
     }
     case 'ACTIVE_ROOMS_UPDATE': {
-      activeRoomsList = payload.rooms || [];
-      renderRealtimeRoomsList();
+      if (Array.isArray(payload.rooms)) {
+        mergeActiveRooms(payload.rooms);
+      }
       break;
     }
     case 'JOIN_REQUEST_PENDING': {
@@ -1019,6 +1022,23 @@ ${hostNick}が呼んでるよ！参加コードは${room.code}だよ！`;
 }
 
 let lobbyUnsubscribe = null;
+let presenceHeartbeatTimer = null;
+
+function startPresenceHeartbeat(roomCode) {
+  stopPresenceHeartbeat();
+  presenceHeartbeatTimer = setInterval(() => {
+    if (activeRoomCode && localPlayerId) {
+      updatePlayerHeartbeat(activeRoomCode, localPlayerId);
+    }
+  }, 10000);
+}
+
+function stopPresenceHeartbeat() {
+  if (presenceHeartbeatTimer) {
+    clearInterval(presenceHeartbeatTimer);
+    presenceHeartbeatTimer = null;
+  }
+}
 
 function enterLobbyView(roomCode, roomData) {
   onlineHubView.style.display = 'none';
@@ -1039,6 +1059,7 @@ function enterLobbyView(roomCode, roomData) {
   }
 
   updateLobbyUI(roomData);
+  startPresenceHeartbeat(roomCode);
 
   // Setup backup sync listener to ensure state stays 100% in sync
   if (lobbyUnsubscribe) {
@@ -1437,7 +1458,10 @@ btnOnlinePlay.addEventListener('click', () => {
   }
   openModal(onlinePlayModal);
 });
-btnCloseOnlinePlay.addEventListener('click', () => closeModal(onlinePlayModal));
+btnCloseOnlinePlay.addEventListener('click', () => {
+  stopFirestoreRoomsListener();
+  closeModal(onlinePlayModal);
+});
 
 btnCardCreateRoom.addEventListener('click', () => {
   onlineHubView.style.display = 'none';
@@ -1485,17 +1509,51 @@ if (btnSettingsGuiPc) btnSettingsGuiPc.addEventListener('click', () => applyGuiM
 if (btnSettingsGuiMobile) btnSettingsGuiMobile.addEventListener('click', () => applyGuiMode('mobile', true));
 
 // --- Real-Time Rooms List View ---
+let firestoreRoomsUnsub = null;
+
+function mergeActiveRooms(newRoomsList) {
+  const roomsMap = new Map();
+  (activeRoomsList || []).forEach(r => {
+    if (r && r.code) roomsMap.set(r.code, r);
+  });
+  (newRoomsList || []).forEach(r => {
+    if (r && r.code) {
+      roomsMap.set(r.code, r);
+    }
+  });
+  activeRoomsList = Array.from(roomsMap.values()).filter(r => r.status !== 'finished');
+  renderRealtimeRoomsList();
+}
+
+function startFirestoreRoomsListener() {
+  if (firestoreRoomsUnsub) return;
+  firestoreRoomsUnsub = subscribeToActiveRooms((rooms) => {
+    mergeActiveRooms(rooms);
+  }, (err) => {
+    console.warn('[Firestore Rooms Subscription Error]', err);
+  });
+}
+
+function stopFirestoreRoomsListener() {
+  if (firestoreRoomsUnsub) {
+    try { firestoreRoomsUnsub(); } catch (e) {}
+    firestoreRoomsUnsub = null;
+  }
+}
+
 btnCardShowJoinInput.addEventListener('click', () => {
   onlineHubView.style.display = 'none';
   onlineJoinRoomView.style.display = 'block';
+  startFirestoreRoomsListener();
   loadActiveRooms();
   if (roomsPollingInterval) clearInterval(roomsPollingInterval);
-  roomsPollingInterval = setInterval(loadActiveRooms, 3000);
+  roomsPollingInterval = setInterval(loadActiveRooms, 3500);
 });
 
 if (btnBackFromJoinRoom) {
   btnBackFromJoinRoom.addEventListener('click', () => {
     if (roomsPollingInterval) clearInterval(roomsPollingInterval);
+    stopFirestoreRoomsListener();
     onlineJoinRoomView.style.display = 'none';
     onlineHubView.style.display = 'block';
   });
@@ -1505,7 +1563,7 @@ if (btnRefreshRoomsList) {
   btnRefreshRoomsList.addEventListener('click', () => {
     sound.playClick();
     loadActiveRooms();
-    showToast('部屋一覧を更新しました');
+    showToast('部屋一覧を最新に更新しました');
   });
 }
 
@@ -1515,34 +1573,36 @@ async function loadActiveRooms() {
   }
   const roomsMap = new Map();
 
-  // 1. Fetch from Express Server API
-  try {
-    const res = await fetch('/api/jinrou/rooms');
-    if (res.ok) {
-      const data = await res.json();
-      (data.rooms || []).forEach(r => {
-        if (r && r.code) roomsMap.set(r.code, r);
-      });
-    }
-  } catch (e) {
-    console.warn('[Room List Fetch Server]', e);
-  }
-
-  // 2. Fetch from Firebase Firestore
+  // 1. Fetch from Firebase Firestore directly
   try {
     const firestoreRooms = await fetchActiveFirestoreRooms();
     firestoreRooms.forEach(r => {
       if (r && r.code) {
-        if (!roomsMap.has(r.code) || (roomsMap.get(r.code).playerCount < r.playerCount)) {
-          roomsMap.set(r.code, r);
-        }
+        roomsMap.set(r.code, r);
       }
     });
   } catch (e) {
     console.warn('[Room List Fetch Firestore]', e);
   }
 
-  activeRoomsList = Array.from(roomsMap.values());
+  // 2. Fetch from Express Server API
+  try {
+    const res = await fetch('/api/jinrou/rooms');
+    if (res.ok) {
+      const data = await res.json();
+      (data.rooms || []).forEach(r => {
+        if (r && r.code) {
+          if (!roomsMap.has(r.code) || roomsMap.get(r.code).playerCount < r.playerCount) {
+            roomsMap.set(r.code, r);
+          }
+        }
+      });
+    }
+  } catch (e) {
+    console.warn('[Room List Fetch Server]', e);
+  }
+
+  activeRoomsList = Array.from(roomsMap.values()).filter(r => r.status !== 'finished');
   renderRealtimeRoomsList();
 }
 
@@ -1840,6 +1900,7 @@ btnInviteShare.addEventListener('click', () => {
 });
 
 btnLeaveRoom.addEventListener('click', async () => {
+  stopPresenceHeartbeat();
   if (lobbyUnsubscribe) {
     try { lobbyUnsubscribe(); } catch (e) {}
     lobbyUnsubscribe = null;

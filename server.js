@@ -5,9 +5,25 @@ import fs from 'fs';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { WebSocketServer, WebSocket } from 'ws';
+import { initializeApp, getApps } from 'firebase/app';
+import { getFirestore, collection, doc, getDoc, getDocs, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Server-side Firebase Firestore connection
+const firebaseConfigFile = path.join(__dirname, 'firebase-applet-config.json');
+let firestoreDb = null;
+if (fs.existsSync(firebaseConfigFile)) {
+  try {
+    const fbConfig = JSON.parse(fs.readFileSync(firebaseConfigFile, 'utf8'));
+    const fbApp = getApps().length === 0 ? initializeApp(fbConfig) : getApps()[0];
+    firestoreDb = getFirestore(fbApp, fbConfig.firestoreDatabaseId);
+    console.log('[jinrou-online] Server-side Firebase Firestore connected:', fbConfig.firestoreDatabaseId);
+  } catch (err) {
+    console.warn('[jinrou-online] Server Firebase init failed:', err.message);
+  }
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -82,10 +98,12 @@ function generateRoomCode() {
   return code;
 }
 
-function getActiveRoomsSummary() {
-  const list = [];
+async function getActiveRoomsSummary() {
+  const roomsMap = new Map();
+
+  // 1. In-memory active rooms
   for (const room of rooms.values()) {
-    list.push({
+    roomsMap.set(room.code, {
       code: room.code,
       hostNickname: room.hostNickname || 'ホスト',
       playerCount: room.players.size,
@@ -95,13 +113,41 @@ function getActiveRoomsSummary() {
       status: room.status || 'waiting'
     });
   }
-  return list;
+
+  // 2. Merge with Firestore rooms
+  if (firestoreDb) {
+    try {
+      const snap = await getDocs(collection(firestoreDb, 'jinrou_rooms'));
+      snap.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data && data.code && data.status !== 'finished') {
+          const count = data.players ? Object.keys(data.players).length : (data.members ? data.members.length : 0);
+          if (!roomsMap.has(data.code) || roomsMap.get(data.code).playerCount < count) {
+            roomsMap.set(data.code, {
+              code: data.code,
+              hostNickname: data.hostNickname || 'ホスト',
+              playerCount: count,
+              maxPlayers: data.maxPlayers || 5,
+              roleMode: data.roleMode || 'normal',
+              discussionTime: data.discussionTime || 60,
+              status: data.status || 'waiting'
+            });
+          }
+        }
+      });
+    } catch (err) {
+      console.warn('[Server Firestore Active Rooms]', err.message);
+    }
+  }
+
+  return Array.from(roomsMap.values());
 }
 
-function broadcastActiveRoomsList() {
+async function broadcastActiveRoomsList() {
+  const activeRooms = await getActiveRoomsSummary();
   const payload = JSON.stringify({
     type: 'ACTIVE_ROOMS_UPDATE',
-    payload: { rooms: getActiveRoomsSummary() }
+    payload: { rooms: activeRooms }
   });
   if (typeof wss !== 'undefined' && wss && wss.clients) {
     for (const client of wss.clients) {
@@ -226,13 +272,14 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', app: 'jinrou-online', activeRooms: rooms.size });
 });
 
-app.get('/api/jinrou/rooms', (req, res) => {
-  res.json({ rooms: getActiveRoomsSummary() });
+app.get('/api/jinrou/rooms', async (req, res) => {
+  const roomsList = await getActiveRoomsSummary();
+  res.json({ rooms: roomsList });
 });
 
-app.get('/api/jinrou/rooms/:code', (req, res) => {
+app.get('/api/jinrou/rooms/:code', async (req, res) => {
   const cleanCode = (req.params.code || '').toString().replace(/^[#＃]/, '').trim();
-  const room = rooms.get(cleanCode);
+  const room = await ensureRoomInMemory(cleanCode);
   if (!room) return res.status(404).json({ error: `部屋（#${cleanCode}）が見つかりませんでした` });
   res.json(getRoomSnapshot(room));
 });
@@ -291,19 +338,35 @@ app.post('/api/jinrou/rooms', (req, res) => {
   res.json(snap);
 });
 
-function ensureRoomInMemory(code, roomData) {
+async function ensureRoomInMemory(code, roomData = null) {
   let room = rooms.get(code);
-  if (!room && roomData) {
+  if (room) return room;
+
+  let data = roomData;
+
+  // If not provided in payload, check Firestore!
+  if (!data && firestoreDb) {
+    try {
+      const snap = await getDoc(doc(firestoreDb, 'jinrou_rooms', code));
+      if (snap && snap.exists()) {
+        data = snap.data();
+      }
+    } catch (e) {
+      console.warn('[Server Firestore check room error]', e.message);
+    }
+  }
+
+  if (data) {
     room = {
       code,
-      hostId: roomData.hostId || 'host',
-      hostNickname: roomData.hostNickname || 'ホスト',
-      status: roomData.status || 'waiting',
-      maxPlayers: Number(roomData.maxPlayers) || 5,
-      discussionTime: Number(roomData.discussionTime) || 60,
-      roleMode: roomData.roleMode || 'normal',
-      rolesConfig: roomData.rolesConfig || {},
-      rolesList: roomData.rolesList || [],
+      hostId: data.hostId || 'host',
+      hostNickname: data.hostNickname || 'ホスト',
+      status: data.status || 'waiting',
+      maxPlayers: Number(data.maxPlayers) || 5,
+      discussionTime: Number(data.discussionTime) || 60,
+      roleMode: data.roleMode || 'normal',
+      rolesConfig: data.rolesConfig || {},
+      rolesList: data.rolesList || [],
       players: new Map(),
       sockets: new Map(),
       pendingRequests: new Map(),
@@ -311,8 +374,8 @@ function ensureRoomInMemory(code, roomData) {
       game: null,
       timerInterval: null
     };
-    if (roomData.players) {
-      for (const [pId, pInfo] of Object.entries(roomData.players)) {
+    if (data.players) {
+      for (const [pId, pInfo] of Object.entries(data.players)) {
         room.players.set(pId, {
           id: pId,
           nickname: pInfo.nickname || 'プレイヤー',
@@ -326,14 +389,15 @@ function ensureRoomInMemory(code, roomData) {
       }
     }
     rooms.set(code, room);
+    return room;
   }
-  return room;
+  return null;
 }
 
-app.post('/api/jinrou/rooms/:code/join', (req, res) => {
+app.post('/api/jinrou/rooms/:code/join', async (req, res) => {
   const cleanCode = (req.params.code || '').toString().replace(/^[#＃]/, '').trim();
   const { playerId, playerNickname, isVcOn, roomData } = req.body;
-  const room = ensureRoomInMemory(cleanCode, roomData);
+  const room = await ensureRoomInMemory(cleanCode, roomData);
 
   if (!room) return res.status(404).json({ error: `部屋（#${cleanCode}）が見つかりませんでした。コードをご確認ください。` });
   if (room.status !== 'waiting') return res.status(400).json({ error: 'ゲームが既に開始されているか終了しています。' });
@@ -388,16 +452,17 @@ wss.on('connection', (ws) => {
   let clientRoomCode = null;
   let clientPlayerId = null;
 
-  ws.on('message', (raw) => {
+  ws.on('message', async (raw) => {
     try {
       const msg = JSON.parse(raw.toString());
       const { type, payload } = msg;
 
       switch (type) {
         case 'GET_ACTIVE_ROOMS': {
+          const activeRooms = await getActiveRoomsSummary();
           ws.send(JSON.stringify({
             type: 'ACTIVE_ROOMS_UPDATE',
-            payload: { rooms: getActiveRoomsSummary() }
+            payload: { rooms: activeRooms }
           }));
           break;
         }
@@ -462,7 +527,7 @@ wss.on('connection', (ws) => {
 
         case 'JOIN_ROOM': {
           const code = (payload.code || '').toString().replace(/^[#＃]/, '').trim();
-          const room = ensureRoomInMemory(code, payload.roomData);
+          const room = await ensureRoomInMemory(code, payload.roomData);
           if (!room) {
             return ws.send(JSON.stringify({
               type: 'ERROR',
@@ -521,7 +586,7 @@ wss.on('connection', (ws) => {
           const requesterNickname = payload.requesterNickname || payload.nickname || 'プレイヤー';
           const isVcOn = payload.isVcOn !== false;
 
-          const room = ensureRoomInMemory(code, payload.roomData);
+          const room = await ensureRoomInMemory(code, payload.roomData);
           if (!room) {
             return ws.send(JSON.stringify({
               type: 'JOIN_REQUEST_ERROR',
@@ -865,7 +930,7 @@ wss.on('connection', (ws) => {
         }
 
         case 'LEAVE_ROOM': {
-          handleLeave(ws, clientRoomCode, clientPlayerId);
+          handleLeave(ws, clientRoomCode, clientPlayerId, true);
           clientRoomCode = null;
           clientPlayerId = null;
           break;
@@ -877,11 +942,11 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
-    handleLeave(ws, clientRoomCode, clientPlayerId);
+    handleLeave(ws, clientRoomCode, clientPlayerId, false);
   });
 });
 
-function handleLeave(ws, roomCode, playerId) {
+function handleLeave(ws, roomCode, playerId, isExplicitLeave = false) {
   // If this socket was waiting on a pending join request in any room, cancel it
   if (ws && ws._pendingRoomCode && ws._pendingRequesterId) {
     const pRoom = rooms.get(ws._pendingRoomCode);
@@ -894,35 +959,62 @@ function handleLeave(ws, roomCode, playerId) {
   if (!roomCode || !rooms.has(roomCode)) return;
   const room = rooms.get(roomCode);
   room.sockets.delete(playerId);
-  if (playerId) {
+
+  if (isExplicitLeave && playerId) {
     room.players.delete(playerId);
+  } else if (playerId && room.players.has(playerId)) {
+    const p = room.players.get(playerId);
+    p.isOnline = false;
   }
+
   if (room.pendingRequests && playerId) {
     room.pendingRequests.delete(playerId);
   }
 
-  if (room.players.size === 0) {
+  const activeSocketsCount = Array.from(room.sockets.values()).filter(s => s && s.readyState === WebSocket.OPEN).length;
+
+  if (room.players.size === 0 || (isExplicitLeave && room.players.size === 0)) {
     if (room.timerInterval) clearInterval(room.timerInterval);
     rooms.delete(roomCode);
-    console.log(`[jinrou-online] Room #${roomCode} closed (empty).`);
+    console.log(`[jinrou-online] Room #${roomCode} closed (explicit leave).`);
+    broadcastActiveRoomsList();
+  } else if (activeSocketsCount === 0) {
+    // Grace period before closing room on connection drop (allows page reloads)
+    if (!room._cleanupTimer) {
+      room._cleanupTimer = setTimeout(() => {
+        const currentActive = Array.from(room.sockets.values()).filter(s => s && s.readyState === WebSocket.OPEN).length;
+        if (currentActive === 0) {
+          if (room.timerInterval) clearInterval(room.timerInterval);
+          rooms.delete(roomCode);
+          console.log(`[jinrou-online] Room #${roomCode} closed after 60s inactivity.`);
+          broadcastActiveRoomsList();
+        }
+      }, 60000);
+    }
   } else {
+    if (room._cleanupTimer) {
+      clearTimeout(room._cleanupTimer);
+      room._cleanupTimer = null;
+    }
     broadcastToRoom(roomCode, {
       type: 'PEER_LEFT',
       payload: { peerId: playerId }
     });
 
-    if (room.hostId === playerId) {
+    if (room.hostId === playerId && isExplicitLeave) {
       const nextHostId = room.players.keys().next().value;
-      room.hostId = nextHostId;
-      const nextHost = room.players.get(nextHostId);
-      if (nextHost) {
-        nextHost.isHost = true;
-        room.hostNickname = nextHost.nickname;
+      if (nextHostId) {
+        room.hostId = nextHostId;
+        const nextHost = room.players.get(nextHostId);
+        if (nextHost) {
+          nextHost.isHost = true;
+          room.hostNickname = nextHost.nickname;
+        }
       }
     }
     broadcastToRoom(roomCode, { type: 'ROOM_UPDATE', payload: getRoomSnapshot(room) });
+    broadcastActiveRoomsList();
   }
-  broadcastActiveRoomsList();
 }
 
 // --- Authoritative Game Timer & State Machine ---

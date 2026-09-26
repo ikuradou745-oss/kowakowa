@@ -78,6 +78,15 @@
         "players": {
           "type": "object",
           "description": "Map of player IDs to player states"
+        },
+        "members": {
+          "type": "array",
+          "description": "List of active members/users in the room with presence status"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last activity timestamp"
         }
       },
       "required": ["code", "hostId", "status"]

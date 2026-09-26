@@ -73,14 +73,6 @@ if (typeof window !== "undefined" && window.BroadcastChannel) {
   }
 }
 
-// Helper: safe promise with timeout so Firebase never freezes the UI
-function withTimeout(promise, ms = 2500) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), ms))
-  ]);
-}
-
 // Helper: sync room state to localStorage
 export function saveRoomLocally(roomData) {
   if (!roomData || !roomData.code) return;
@@ -154,6 +146,22 @@ export async function createFirestoreRoom(roomCode, hostId, hostNickname, settin
   const rolesList = settings.rolesList || [];
   const discussionTime = Number(settings.discussionTime) || 60;
 
+  const now = Date.now();
+  const hostPlayer = {
+    id: hostId,
+    nickname: hostNickname,
+    isHost: true,
+    isLeader: true,
+    role: null,
+    isAlive: true,
+    isOnline: true,
+    isVcOn: true,
+    isMuted: false,
+    isSpeaking: false,
+    joinedAt: now,
+    lastActive: now
+  };
+
   const roomData = {
     code: cleanCode,
     hostId,
@@ -166,43 +174,35 @@ export async function createFirestoreRoom(roomCode, hostId, hostNickname, settin
     status: "waiting", // waiting | in_game | finished
     phase: "day", // day | vote | night
     dayCount: 1,
-    createdAt: Date.now(),
+    createdAt: now,
+    updatedAt: now,
     players: {
-      [hostId]: {
-        id: hostId,
-        nickname: hostNickname,
-        isHost: true,
-        isLeader: true,
-        role: null,
-        isAlive: true,
-        isVcOn: true,
-        isMuted: false,
-        isSpeaking: false,
-        joinedAt: Date.now()
-      }
-    }
+      [hostId]: hostPlayer
+    },
+    members: [
+      { id: hostId, nickname: hostNickname, isHost: true, isOnline: true }
+    ]
   };
 
-  // 1. Immediately store in local memory & storage so UI is INSTANTANEOUS
+  // 1. Immediately store in local memory & storage so UI is instantaneous
   saveRoomLocally(roomData);
 
   // 2. Synchronously notify Express server API
   try {
-    await fetch('/api/jinrou/rooms', {
+    fetch('/api/jinrou/rooms', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(roomData)
-    });
-  } catch (e) {
-    console.warn("[Server Sync] Notice on room create:", e.message);
-  }
+    }).catch(e => console.warn("[Server Sync] Notice on room create:", e.message));
+  } catch (e) {}
 
   // 3. Save to Firebase Firestore
   try {
     const roomRef = doc(db, "jinrou_rooms", cleanCode);
     await setDoc(roomRef, {
       ...roomData,
-      createdAt: serverTimestamp()
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
     });
     console.log("[Firebase] Room created successfully in Firestore:", cleanCode);
   } catch (err) {
@@ -219,7 +219,7 @@ export async function joinFirestoreRoom(roomCode, playerId, playerNickname, isVc
   // 1. Check Firebase Firestore directly first
   try {
     const roomRef = doc(db, "jinrou_rooms", cleanCode);
-    const snap = await withTimeout(getDoc(roomRef), 2000);
+    const snap = await getDoc(roomRef);
     if (snap && snap.exists()) {
       roomData = snap.data();
     }
@@ -227,10 +227,10 @@ export async function joinFirestoreRoom(roomCode, playerId, playerNickname, isVc
     handleFirestoreError(e, OperationType.GET, `jinrou_rooms/${cleanCode}`);
   }
 
-  // 2. Check Express server API if not found or offline
+  // 2. Check Express server API if not found in Firestore
   if (!roomData) {
     try {
-      const res = await withTimeout(fetch(`/api/jinrou/rooms/${cleanCode}`), 1500);
+      const res = await fetch(`/api/jinrou/rooms/${cleanCode}`);
       if (res.ok) {
         roomData = await res.json();
       }
@@ -250,31 +250,46 @@ export async function joinFirestoreRoom(roomCode, playerId, playerNickname, isVc
     throw new Error("この部屋は既にゲームが開始されているか、終了しています。");
   }
 
-  const playerEntries = Object.keys(roomData.players || {});
+  const currentPlayers = roomData.players || {};
+  const playerEntries = Object.keys(currentPlayers);
   const maxAllowed = roomData.maxPlayers || 12;
-  if (playerEntries.length >= maxAllowed && !roomData.players[playerId]) {
+  if (playerEntries.length >= maxAllowed && !currentPlayers[playerId]) {
     throw new Error(`部屋が満員です（定員: ${maxAllowed}人）`);
   }
 
+  const now = Date.now();
+  const isHost = (roomData.hostId === playerId);
+
   const updatedPlayers = {
-    ...(roomData.players || {}),
+    ...currentPlayers,
     [playerId]: {
       id: playerId,
       nickname: playerNickname,
-      isHost: (roomData.hostId === playerId),
-      isLeader: (roomData.hostId === playerId),
+      isHost,
+      isLeader: isHost,
       role: null,
       isAlive: true,
+      isOnline: true,
       isVcOn: isVcOn !== false,
       isMuted: false,
       isSpeaking: false,
-      joinedAt: Date.now()
+      joinedAt: currentPlayers[playerId]?.joinedAt || now,
+      lastActive: now
     }
   };
 
+  const updatedMembers = Object.values(updatedPlayers).map(p => ({
+    id: p.id,
+    nickname: p.nickname,
+    isHost: !!p.isHost,
+    isOnline: p.isOnline !== false
+  }));
+
   const updatedRoom = {
     ...roomData,
-    players: updatedPlayers
+    players: updatedPlayers,
+    members: updatedMembers,
+    updatedAt: now
   };
 
   // Save locally
@@ -293,7 +308,9 @@ export async function joinFirestoreRoom(roomCode, playerId, playerNickname, isVc
   try {
     const roomRef = doc(db, "jinrou_rooms", cleanCode);
     await setDoc(roomRef, {
-      players: updatedPlayers
+      players: updatedPlayers,
+      members: updatedMembers,
+      updatedAt: serverTimestamp()
     }, { merge: true });
     console.log("[Firebase] Player joined room in Firestore:", cleanCode);
   } catch (err) {
@@ -307,11 +324,11 @@ export async function fetchActiveFirestoreRooms() {
   const roomsList = [];
   try {
     const q = collection(db, "jinrou_rooms");
-    const snapshot = await withTimeout(getDocs(q), 2500);
+    const snapshot = await getDocs(q);
     snapshot.forEach((docSnap) => {
       const data = docSnap.data();
       if (data && data.code && data.status !== 'finished') {
-        const count = data.players ? Object.keys(data.players).length : 0;
+        const count = data.players ? Object.keys(data.players).length : (data.members ? data.members.length : 0);
         roomsList.push({
           code: data.code,
           hostNickname: data.hostNickname || 'ホスト',
@@ -327,6 +344,54 @@ export async function fetchActiveFirestoreRooms() {
     handleFirestoreError(err, OperationType.LIST, "jinrou_rooms");
   }
   return roomsList;
+}
+
+// Real-Time subscription for all active rooms in Firestore
+export function subscribeToActiveRooms(onUpdate, onError) {
+  try {
+    const q = collection(db, "jinrou_rooms");
+    return onSnapshot(q, (snapshot) => {
+      const roomsList = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data && data.code && data.status !== 'finished') {
+          const count = data.players ? Object.keys(data.players).length : (data.members ? data.members.length : 0);
+          roomsList.push({
+            code: data.code,
+            hostNickname: data.hostNickname || 'ホスト',
+            playerCount: count,
+            maxPlayers: data.maxPlayers || 5,
+            roleMode: data.roleMode || 'normal',
+            discussionTime: data.discussionTime || 60,
+            status: data.status || 'waiting'
+          });
+        }
+      });
+      onUpdate(roomsList);
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, "jinrou_rooms");
+      if (typeof onError === 'function') onError(err);
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.LIST, "jinrou_rooms");
+    return () => {};
+  }
+}
+
+// Real-Time presence heartbeat for a player in a room
+export async function updatePlayerHeartbeat(roomCode, playerId) {
+  if (!roomCode || !playerId) return;
+  const cleanCode = (roomCode || '').toString().replace(/^[#＃]/, '').trim();
+  try {
+    const roomRef = doc(db, "jinrou_rooms", cleanCode);
+    await updateDoc(roomRef, {
+      [`players.${playerId}.lastActive`]: Date.now(),
+      [`players.${playerId}.isOnline`]: true,
+      updatedAt: serverTimestamp()
+    });
+  } catch (e) {
+    // Non-critical, ignore silent failures
+  }
 }
 
 export function subscribeToRoom(roomCode, onUpdate, onError) {
@@ -351,7 +416,7 @@ export function subscribeToRoom(roomCode, onUpdate, onError) {
     roomBroadcastChannel.addEventListener("message", handleBroadcast);
   }
 
-  // 3. Periodic poll from Express server API
+  // 3. Periodic poll from Express server API as backup
   const pollTimer = setInterval(async () => {
     if (isUnsubscribed) return;
     try {
@@ -362,7 +427,7 @@ export function subscribeToRoom(roomCode, onUpdate, onError) {
         onUpdate(data);
       }
     } catch (e) {}
-  }, 2000);
+  }, 2500);
 
   // 4. Firestore onSnapshot real-time subscription
   let firestoreUnsub = () => {};
@@ -408,8 +473,10 @@ export async function leaveFirestoreRoom(roomCode, playerId) {
       if (room.hostId === playerId) {
         const remaining = Object.keys(room.players);
         room.hostId = remaining[0];
-        room.players[remaining[0]].isHost = true;
-        room.players[remaining[0]].isLeader = true;
+        if (room.players[remaining[0]]) {
+          room.players[remaining[0]].isHost = true;
+          room.players[remaining[0]].isLeader = true;
+        }
       }
       saveRoomLocally(room);
     }
@@ -432,17 +499,28 @@ export async function leaveFirestoreRoom(roomCode, playerId) {
       const data = snap.data();
       const players = { ...(data.players || {}) };
       delete players[playerId];
-      if (Object.keys(players).length === 0) {
+      const remainingIds = Object.keys(players);
+      if (remainingIds.length === 0) {
         await deleteDoc(roomRef);
       } else {
         let hostId = data.hostId;
         if (hostId === playerId) {
-          const remainingIds = Object.keys(players);
           hostId = remainingIds[0];
           players[hostId].isHost = true;
           players[hostId].isLeader = true;
         }
-        await updateDoc(roomRef, { hostId, players });
+        const updatedMembers = remainingIds.map(id => ({
+          id,
+          nickname: players[id].nickname,
+          isHost: (id === hostId),
+          isOnline: players[id].isOnline !== false
+        }));
+        await updateDoc(roomRef, {
+          hostId,
+          players,
+          members: updatedMembers,
+          updatedAt: serverTimestamp()
+        });
       }
     }
   } catch (err) {

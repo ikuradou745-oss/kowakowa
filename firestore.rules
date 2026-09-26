@@ -24,6 +24,10 @@ service cloud.firestore {
       allow read: if true;
       allow create, update: if roomCode is string && roomCode.size() <= 32;
       allow delete: if roomCode is string && roomCode.size() <= 32;
+
+      match /{subcollection=**} {
+        allow read, write: if roomCode is string && roomCode.size() <= 32;
+      }
     }
   }
 }
