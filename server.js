@@ -291,10 +291,50 @@ app.post('/api/jinrou/rooms', (req, res) => {
   res.json(snap);
 });
 
+function ensureRoomInMemory(code, roomData) {
+  let room = rooms.get(code);
+  if (!room && roomData) {
+    room = {
+      code,
+      hostId: roomData.hostId || 'host',
+      hostNickname: roomData.hostNickname || 'ホスト',
+      status: roomData.status || 'waiting',
+      maxPlayers: Number(roomData.maxPlayers) || 5,
+      discussionTime: Number(roomData.discussionTime) || 60,
+      roleMode: roomData.roleMode || 'normal',
+      rolesConfig: roomData.rolesConfig || {},
+      rolesList: roomData.rolesList || [],
+      players: new Map(),
+      sockets: new Map(),
+      pendingRequests: new Map(),
+      chatHistory: [],
+      game: null,
+      timerInterval: null
+    };
+    if (roomData.players) {
+      for (const [pId, pInfo] of Object.entries(roomData.players)) {
+        room.players.set(pId, {
+          id: pId,
+          nickname: pInfo.nickname || 'プレイヤー',
+          isHost: !!pInfo.isHost || (room.hostId === pId),
+          isAlive: pInfo.isAlive !== false,
+          isVcOn: pInfo.isVcOn !== false,
+          isMuted: !!pInfo.isMuted,
+          isSpeaking: false,
+          joinedAt: pInfo.joinedAt || Date.now()
+        });
+      }
+    }
+    rooms.set(code, room);
+  }
+  return room;
+}
+
 app.post('/api/jinrou/rooms/:code/join', (req, res) => {
   const cleanCode = (req.params.code || '').toString().replace(/^[#＃]/, '').trim();
-  const { playerId, playerNickname } = req.body;
-  const room = rooms.get(cleanCode);
+  const { playerId, playerNickname, isVcOn, roomData } = req.body;
+  const room = ensureRoomInMemory(cleanCode, roomData);
+
   if (!room) return res.status(404).json({ error: `部屋（#${cleanCode}）が見つかりませんでした。コードをご確認ください。` });
   if (room.status !== 'waiting') return res.status(400).json({ error: 'ゲームが既に開始されているか終了しています。' });
   if (room.players.size >= (room.maxPlayers || 12) && !room.players.has(playerId)) {
@@ -306,7 +346,7 @@ app.post('/api/jinrou/rooms/:code/join', (req, res) => {
     nickname: playerNickname || 'プレイヤー',
     isHost: room.hostId === playerId,
     isAlive: true,
-    isVcOn: true,
+    isVcOn: isVcOn !== false,
     isMuted: false,
     isSpeaking: false,
     joinedAt: Date.now()
@@ -422,7 +462,7 @@ wss.on('connection', (ws) => {
 
         case 'JOIN_ROOM': {
           const code = (payload.code || '').toString().replace(/^[#＃]/, '').trim();
-          const room = rooms.get(code);
+          const room = ensureRoomInMemory(code, payload.roomData);
           if (!room) {
             return ws.send(JSON.stringify({
               type: 'ERROR',
@@ -481,7 +521,7 @@ wss.on('connection', (ws) => {
           const requesterNickname = payload.requesterNickname || payload.nickname || 'プレイヤー';
           const isVcOn = payload.isVcOn !== false;
 
-          const room = rooms.get(code);
+          const room = ensureRoomInMemory(code, payload.roomData);
           if (!room) {
             return ws.send(JSON.stringify({
               type: 'JOIN_REQUEST_ERROR',

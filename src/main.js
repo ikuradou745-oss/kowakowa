@@ -6,7 +6,8 @@ import {
   createFirestoreRoom, 
   joinFirestoreRoom, 
   leaveFirestoreRoom,
-  subscribeToRoom 
+  subscribeToRoom,
+  fetchActiveFirestoreRooms
 } from './firebase.js';
 
 // --- State Variables ---
@@ -1512,16 +1513,37 @@ async function loadActiveRooms() {
   if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type: 'GET_ACTIVE_ROOMS' }));
   }
+  const roomsMap = new Map();
+
+  // 1. Fetch from Express Server API
   try {
     const res = await fetch('/api/jinrou/rooms');
     if (res.ok) {
       const data = await res.json();
-      activeRoomsList = data.rooms || [];
-      renderRealtimeRoomsList();
+      (data.rooms || []).forEach(r => {
+        if (r && r.code) roomsMap.set(r.code, r);
+      });
     }
   } catch (e) {
-    console.warn('[Room List Fetch]', e);
+    console.warn('[Room List Fetch Server]', e);
   }
+
+  // 2. Fetch from Firebase Firestore
+  try {
+    const firestoreRooms = await fetchActiveFirestoreRooms();
+    firestoreRooms.forEach(r => {
+      if (r && r.code) {
+        if (!roomsMap.has(r.code) || (roomsMap.get(r.code).playerCount < r.playerCount)) {
+          roomsMap.set(r.code, r);
+        }
+      }
+    });
+  } catch (e) {
+    console.warn('[Room List Fetch Firestore]', e);
+  }
+
+  activeRoomsList = Array.from(roomsMap.values());
+  renderRealtimeRoomsList();
 }
 
 function renderRealtimeRoomsList() {
@@ -1568,13 +1590,13 @@ function renderRealtimeRoomsList() {
 
     let actionButtonHtml = '';
     if (isPending) {
-      actionButtonHtml = `<button class="btn-room-enter pending" data-room-code="${r.code}">⏳ 申請中 (許可待ち)</button>`;
+      actionButtonHtml = `<button class="btn-room-enter pending" data-room-code="${r.code}">⏳ 申請中 (ホスト承認待ち)</button>`;
     } else if (isInGame) {
       actionButtonHtml = `<button class="btn-room-enter" disabled>⚔️ 試合中</button>`;
     } else if (isFull) {
       actionButtonHtml = `<button class="btn-room-enter" disabled>🔴 満員</button>`;
     } else {
-      actionButtonHtml = `<button class="btn-room-enter" data-room-code="${r.code}" data-host-name="${r.hostNickname || 'ホスト'}">その部屋に入る</button>`;
+      actionButtonHtml = `<button class="btn-room-enter" data-room-code="${r.code}" data-host-name="${r.hostNickname || 'ホスト'}">ホストに申請して入る</button>`;
     }
 
     card.innerHTML = `
@@ -1606,6 +1628,7 @@ function renderRealtimeRoomsList() {
   });
 }
 
+// オンライン一覧から部屋を探して入る場合はホストの申請が必要
 function requestJoinRoom(roomCode, hostNickname = 'ホスト') {
   const cleanCode = (roomCode || '').toString().replace(/^[#＃]/, '').trim();
   if (!cleanCode || !/^\d{4}$/.test(cleanCode)) {
@@ -1616,20 +1639,75 @@ function requestJoinRoom(roomCode, hostNickname = 'ホスト') {
   sound.playClick();
   pendingRequestRoomCode = cleanCode;
 
+  const foundRoom = activeRoomsList.find(r => r.code === cleanCode);
+
   // Send real-time join request to Host via WebSocket
   sendWs('REQUEST_JOIN_ROOM', {
     roomCode: cleanCode,
     requesterId: localPlayerId,
     requesterNickname: localNickname,
-    isVcOn: voiceManager.isVcEnabled
+    isVcOn: voiceManager.isVcEnabled,
+    roomData: foundRoom
   });
 
   if (joinRequestWaitingDesc) {
-    joinRequestWaitingDesc.innerHTML = `ホスト（<strong>${hostNickname}</strong>）に部屋「#${cleanCode}」への参加申請を送信しました。<br>ホストが許可すると自動で部屋に入室します。`;
+    joinRequestWaitingDesc.innerHTML = `ホスト（<strong>${hostNickname}</strong>）に部屋「#${cleanCode}」への参加申請を送信しました。<br>ホストが許可すると自動で部屋に入室します。<br><span style="font-size:0.75rem; color:var(--text-muted); margin-top:4px; display:inline-block;">※ 部屋コード直接入力の場合はホスト申請不要で即入室できます</span>`;
   }
   openModal(joinRequestWaitingModal);
   renderRealtimeRoomsList();
   showToast(`ホスト（${hostNickname}）に参加申請を送りました`);
+}
+
+// 部屋コードで入る場合はホストの申請は不要で直接入室
+async function joinDirectRoom(inputCode) {
+  const rawVal = (inputCode || '').toString().trim();
+  const code = rawVal
+    .replace(/[＃#\s]/g, '')
+    .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+    .trim();
+
+  if (code.length < 4 || !/^\d{4}$/.test(code)) {
+    if (joinRoomErrorMsg) {
+      joinRoomErrorMsg.textContent = '4桁の半角数字の部屋コードを入力してください（例: 1234）';
+      joinRoomErrorMsg.classList.add('visible');
+    }
+    showToast('⚠️ 4桁の部屋コードを確認してください');
+    return;
+  }
+  if (joinRoomErrorMsg) joinRoomErrorMsg.classList.remove('visible');
+
+  sound.playClick();
+  showToast(`部屋 #${code} に直接入室中...`);
+
+  try {
+    // 1. Firebase Firestore & Server に直接参加（ホスト申請不要）
+    const roomData = await joinFirestoreRoom(code, localPlayerId, localNickname, voiceManager.isVcEnabled);
+
+    // 2. WebSocket サーバへ JOIN_ROOM 通知
+    sendWs('JOIN_ROOM', {
+      code,
+      playerId: localPlayerId,
+      nickname: localNickname,
+      isVcOn: voiceManager.isVcEnabled,
+      roomData
+    });
+
+    // 3. ロビーへ即時画面遷移
+    activeRoomCode = code;
+    isHost = (roomData.hostId === localPlayerId);
+    currentRoomData = roomData;
+    closeModal(onlinePlayModal);
+    enterLobbyView(code, roomData);
+    sound.playSuccess();
+    showToast(`🎉 部屋 #${code} に直接入室しました！`);
+  } catch (err) {
+    sound.playClick();
+    if (joinRoomErrorMsg) {
+      joinRoomErrorMsg.textContent = err.message || '部屋に入室できませんでした';
+      joinRoomErrorMsg.classList.add('visible');
+    }
+    showToast(`⚠️ 入室エラー: ${err.message}`);
+  }
 }
 
 // Host Response Modal Listeners
@@ -1737,24 +1815,9 @@ btnConfirmCreateRoom.addEventListener('click', async () => {
   }
 });
 
-// Join Room Action (Supports #1234, full-width digits, spaces, and direct code)
+// Join Room Action (部屋コードで入る時はホストの申請は不要で直接入室)
 btnJoinRoomSubmit.addEventListener('click', () => {
-  const rawVal = (roomCodeInput.value || '').trim();
-  // Strip any leading # or ＃, remove spaces, convert Japanese full-width digits to half-width
-  const code = rawVal
-    .replace(/[＃#\s]/g, '')
-    .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
-    .trim();
-
-  if (code.length < 4 || !/^\d{4}$/.test(code)) {
-    joinRoomErrorMsg.textContent = '4桁の半角数字の部屋コードを入力してください（例: 1234）';
-    joinRoomErrorMsg.classList.add('visible');
-    return;
-  }
-  joinRoomErrorMsg.classList.remove('visible');
-
-  // Trigger real-time join request flow to Host
-  requestJoinRoom(code, 'ホスト');
+  joinDirectRoom(roomCodeInput.value);
 });
 
 btnCopyRoomCode.addEventListener('click', () => {
@@ -1836,7 +1899,7 @@ function initApp() {
     onlineHubView.style.display = 'none';
     onlineJoinRoomView.style.display = 'block';
     openModal(onlinePlayModal);
-    requestJoinRoom(roomParam, 'ホスト');
+    joinDirectRoom(roomParam);
   }
 }
 

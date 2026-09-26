@@ -1,0 +1,111 @@
+{
+  "entities": {
+    "PlayerProfile": {
+      "title": "PlayerProfile",
+      "description": "User profile containing nickname, settings, and unlocked game items",
+      "type": "object",
+      "properties": {
+        "nickname": {
+          "type": "string",
+          "description": "Display name of player",
+          "minLength": 2,
+          "maxLength": 8
+        },
+        "vcVolume": {
+          "type": "number",
+          "description": "Voice chat volume percentage"
+        },
+        "coins": {
+          "type": "number",
+          "description": "Total earned coins"
+        },
+        "unlockedRoles": {
+          "type": "array",
+          "description": "List of role IDs unlocked by player"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update timestamp"
+        }
+      },
+      "required": ["nickname"]
+    },
+    "JinrouRoom": {
+      "title": "JinrouRoom",
+      "description": "Online werewolf game room data and state",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "4-digit room code",
+          "pattern": "^[0-9]{4}$"
+        },
+        "hostId": {
+          "type": "string",
+          "description": "Host player ID"
+        },
+        "hostNickname": {
+          "type": "string",
+          "description": "Host player nickname",
+          "maxLength": 20
+        },
+        "maxPlayers": {
+          "type": "number",
+          "description": "Maximum number of allowed players"
+        },
+        "discussionTime": {
+          "type": "number",
+          "description": "Discussion time in seconds"
+        },
+        "roleMode": {
+          "type": "string",
+          "description": "Game mode: normal or original"
+        },
+        "status": {
+          "type": "string",
+          "description": "Room status: waiting, in_game, or finished",
+          "enum": ["waiting", "in_game", "finished"]
+        },
+        "phase": {
+          "type": "string",
+          "description": "Current phase of werewolf game"
+        },
+        "dayCount": {
+          "type": "number",
+          "description": "Current day count"
+        },
+        "players": {
+          "type": "object",
+          "description": "Map of player IDs to player states"
+        }
+      },
+      "required": ["code", "hostId", "status"]
+    },
+    "TestConnection": {
+      "title": "TestConnection",
+      "description": "Health check document for testing Firestore connection",
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "description": "Connection test status"
+        }
+      }
+    }
+  },
+  "firestore": {
+    "/players/{playerId}": {
+      "schema": "PlayerProfile",
+      "description": "Stores user profiles"
+    },
+    "/jinrou_rooms/{roomCode}": {
+      "schema": "JinrouRoom",
+      "description": "Stores online werewolf rooms and real-time game states"
+    },
+    "/test/{testId}": {
+      "schema": "TestConnection",
+      "description": "Testing collection for Firestore health check"
+    }
+  }
+}

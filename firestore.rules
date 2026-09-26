@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Health check test connection document
+    match /test/{testId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Player profiles (nickname, settings, coins, unlocked roles)
+    match /players/{playerId} {
+      allow read: if true;
+      allow create, update: if playerId is string && playerId.size() <= 128;
+      allow delete: if false;
+    }
+
+    // Online werewolf rooms and real-time state synchronization
+    match /jinrou_rooms/{roomCode} {
+      allow read: if true;
+      allow create, update: if roomCode is string && roomCode.size() <= 32;
+      allow delete: if roomCode is string && roomCode.size() <= 32;
+    }
+  }
+}

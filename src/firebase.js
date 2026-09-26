@@ -1,46 +1,63 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAnalytics, isSupported as isAnalyticsSupported } from "firebase/analytics";
 import { 
   getFirestore, 
   collection, 
   doc, 
   setDoc, 
   getDoc, 
+  getDocs,
   onSnapshot, 
   serverTimestamp,
   updateDoc,
-  deleteDoc
+  deleteDoc,
+  getDocFromServer
 } from "firebase/firestore";
-
-// Web app's Firebase configuration provided by user
-const firebaseConfig = {
-  apiKey: (typeof process !== "undefined" && process.env?.FIREBASE_API_KEY) || "AIzaSyDqhonMCcb-Rx1mLm66v0y7vxmzxeaXoBE",
-  authDomain: "rpgs-fa193.firebaseapp.com",
-  projectId: "rpgs-fa193",
-  storageBucket: "rpgs-fa193.firebasestorage.app",
-  messagingSenderId: "682394810498",
-  appId: "1:682394810498:web:acce61ef8ad7479dc6dc9b",
-  measurementId: "G-YFNKWHC5MZ"
-};
+import firebaseConfig from "../firebase-applet-config.json";
 
 // Initialize Firebase App
 export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Firestore
-export const db = getFirestore(app);
+// Initialize Firestore with the provisioned database ID
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
-// Initialize Analytics (safely guarded for browser environments)
-export let analytics = null;
-if (typeof window !== "undefined") {
-  isAnalyticsSupported().then((supported) => {
-    if (supported) {
-      try {
-        analytics = getAnalytics(app);
-      } catch (err) {
-        console.warn("[Firebase Analytics] init notice:", err);
-      }
+// Test connection on boot
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, "test", "connection"));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("the client is offline")) {
+      console.warn("[Firebase] Client is offline or check configuration.");
     }
-  }).catch(() => {});
+  }
+}
+testConnection();
+
+// Standard Error Handler
+export const OperationType = {
+  CREATE: 'create',
+  UPDATE: 'update',
+  DELETE: 'delete',
+  LIST: 'list',
+  GET: 'get',
+  WRITE: 'write',
+};
+
+export function handleFirestoreError(error, operationType, path) {
+  const errInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: null,
+      email: null,
+      emailVerified: null,
+      isAnonymous: true,
+      tenantId: null,
+      providerInfo: []
+    },
+    operationType,
+    path
+  };
+  console.warn('Firestore Error: ', JSON.stringify(errInfo));
+  return errInfo;
 }
 
 // Local In-Memory & Storage Fallback for Instant Zero-Lag Reliability
@@ -57,7 +74,7 @@ if (typeof window !== "undefined" && window.BroadcastChannel) {
 }
 
 // Helper: safe promise with timeout so Firebase never freezes the UI
-function withTimeout(promise, ms = 1200) {
+function withTimeout(promise, ms = 2500) {
   return Promise.race([
     promise,
     new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), ms))
@@ -65,7 +82,7 @@ function withTimeout(promise, ms = 1200) {
 }
 
 // Helper: sync room state to localStorage
-function saveRoomLocally(roomData) {
+export function saveRoomLocally(roomData) {
   if (!roomData || !roomData.code) return;
   localRoomsMemory.set(roomData.code, roomData);
   if (typeof localStorage !== "undefined") {
@@ -81,7 +98,7 @@ function saveRoomLocally(roomData) {
 }
 
 // Helper: retrieve room from local cache
-function getRoomLocally(code) {
+export function getRoomLocally(code) {
   if (localRoomsMemory.has(code)) return localRoomsMemory.get(code);
   if (typeof localStorage !== "undefined") {
     try {
@@ -101,16 +118,15 @@ export async function savePlayerProfile(playerId, nickname, vcVolume = 100, coin
   if (!playerId || !nickname) return;
   try {
     const userRef = doc(db, "players", playerId);
-    await withTimeout(setDoc(userRef, {
+    await setDoc(userRef, {
       nickname: nickname.trim(),
       vcVolume: Number(vcVolume) || 100,
       coins: typeof coins === 'number' ? coins : 0,
       unlockedRoles: Array.isArray(unlockedRoles) ? unlockedRoles : [],
       updatedAt: serverTimestamp()
-    }, { merge: true }), 1000);
+    }, { merge: true });
   } catch (err) {
-    // Non-blocking warning
-    console.warn("[Firebase] Could not save player profile to cloud:", err.message);
+    handleFirestoreError(err, OperationType.WRITE, `players/${playerId}`);
   }
 }
 
@@ -118,12 +134,12 @@ export async function fetchPlayerProfile(playerId) {
   if (!playerId) return null;
   try {
     const userRef = doc(db, "players", playerId);
-    const snap = await withTimeout(getDoc(userRef), 1000);
+    const snap = await getDoc(userRef);
     if (snap && snap.exists()) {
       return snap.data();
     }
   } catch (err) {
-    console.warn("[Firebase] Could not fetch player profile:", err.message);
+    handleFirestoreError(err, OperationType.GET, `players/${playerId}`);
   }
   return null;
 }
@@ -159,6 +175,9 @@ export async function createFirestoreRoom(roomCode, hostId, hostNickname, settin
         isLeader: true,
         role: null,
         isAlive: true,
+        isVcOn: true,
+        isMuted: false,
+        isSpeaking: false,
         joinedAt: Date.now()
       }
     }
@@ -167,74 +186,60 @@ export async function createFirestoreRoom(roomCode, hostId, hostNickname, settin
   // 1. Immediately store in local memory & storage so UI is INSTANTANEOUS
   saveRoomLocally(roomData);
 
-  // 2. Synchronously notify local Express server API if running
+  // 2. Synchronously notify Express server API
   try {
-    await withTimeout(fetch('/api/jinrou/rooms', {
+    await fetch('/api/jinrou/rooms', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(roomData)
-    }), 2000);
+    });
   } catch (e) {
     console.warn("[Server Sync] Notice on room create:", e.message);
   }
 
-  // 3. Sync to Firebase Firestore in the background (fire-and-forget with timeout safeguard)
+  // 3. Save to Firebase Firestore
   try {
     const roomRef = doc(db, "jinrou_rooms", cleanCode);
-    withTimeout(setDoc(roomRef, {
+    await setDoc(roomRef, {
       ...roomData,
       createdAt: serverTimestamp()
-    }), 2500)
-      .then(() => console.log("[Firebase] Room created successfully in Firestore:", cleanCode))
-      .catch((err) => console.warn("[Firebase] Firestore sync notice (server mode active):", err.message));
+    });
+    console.log("[Firebase] Room created successfully in Firestore:", cleanCode);
   } catch (err) {
-    console.warn("[Firebase] Firestore sync notice:", err);
+    handleFirestoreError(err, OperationType.WRITE, `jinrou_rooms/${cleanCode}`);
   }
 
-  // Return immediately so the user transitions to the lobby
   return roomData;
 }
 
-export async function joinFirestoreRoom(roomCode, playerId, playerNickname) {
+export async function joinFirestoreRoom(roomCode, playerId, playerNickname, isVcOn = true) {
   const cleanCode = (roomCode || '').toString().replace(/^[#＃]/, '').trim();
   let roomData = null;
 
-  // 1. Check Express server API first (authoritative and returns updated players list)
+  // 1. Check Firebase Firestore directly first
   try {
-    const res = await withTimeout(fetch(`/api/jinrou/rooms/${cleanCode}/join`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ playerId, playerNickname })
-    }), 2500);
-
-    if (res.ok) {
-      roomData = await res.json();
-      saveRoomLocally(roomData);
-      return roomData;
-    } else {
-      const errJson = await res.json().catch(() => ({}));
-      if (errJson.error && res.status !== 404) {
-        throw new Error(errJson.error);
-      }
+    const roomRef = doc(db, "jinrou_rooms", cleanCode);
+    const snap = await withTimeout(getDoc(roomRef), 2000);
+    if (snap && snap.exists()) {
+      roomData = snap.data();
     }
-  } catch (err) {
-    if (err.message && !err.message.includes('Timeout') && !err.message.includes('Failed to fetch')) {
-      throw err;
-    }
+  } catch (e) {
+    handleFirestoreError(e, OperationType.GET, `jinrou_rooms/${cleanCode}`);
   }
 
-  // 2. Fallback: check local cache (e.g. for offline or single-machine testing)
-  roomData = getRoomLocally(cleanCode);
-
-  // 3. Fallback: check Firestore
+  // 2. Check Express server API if not found or offline
   if (!roomData) {
     try {
-      const roomRef = doc(db, "jinrou_rooms", cleanCode);
-      const snap = await withTimeout(getDoc(roomRef), 1500);
-      if (snap && snap.exists()) {
-        roomData = snap.data();
+      const res = await withTimeout(fetch(`/api/jinrou/rooms/${cleanCode}`), 1500);
+      if (res.ok) {
+        roomData = await res.json();
       }
     } catch (e) {}
+  }
+
+  // 3. Fallback: check local cache
+  if (!roomData) {
+    roomData = getRoomLocally(cleanCode);
   }
 
   if (!roomData) {
@@ -260,6 +265,9 @@ export async function joinFirestoreRoom(roomCode, playerId, playerNickname) {
       isLeader: (roomData.hostId === playerId),
       role: null,
       isAlive: true,
+      isVcOn: isVcOn !== false,
+      isMuted: false,
+      isSpeaking: false,
       joinedAt: Date.now()
     }
   };
@@ -272,15 +280,53 @@ export async function joinFirestoreRoom(roomCode, playerId, playerNickname) {
   // Save locally
   saveRoomLocally(updatedRoom);
 
-  // Non-blocking sync to Firestore
+  // Sync to Express Server API
   try {
-    const roomRef = doc(db, "jinrou_rooms", cleanCode);
-    withTimeout(updateDoc(roomRef, {
-      players: updatedPlayers
-    }), 1500).catch(() => {});
+    fetch(`/api/jinrou/rooms/${cleanCode}/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId, playerNickname, isVcOn, roomData: updatedRoom })
+    }).catch(() => {});
   } catch (e) {}
 
+  // Sync to Firebase Firestore
+  try {
+    const roomRef = doc(db, "jinrou_rooms", cleanCode);
+    await setDoc(roomRef, {
+      players: updatedPlayers
+    }, { merge: true });
+    console.log("[Firebase] Player joined room in Firestore:", cleanCode);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `jinrou_rooms/${cleanCode}`);
+  }
+
   return updatedRoom;
+}
+
+export async function fetchActiveFirestoreRooms() {
+  const roomsList = [];
+  try {
+    const q = collection(db, "jinrou_rooms");
+    const snapshot = await withTimeout(getDocs(q), 2500);
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      if (data && data.code && data.status !== 'finished') {
+        const count = data.players ? Object.keys(data.players).length : 0;
+        roomsList.push({
+          code: data.code,
+          hostNickname: data.hostNickname || 'ホスト',
+          playerCount: count,
+          maxPlayers: data.maxPlayers || 5,
+          roleMode: data.roleMode || 'normal',
+          discussionTime: data.discussionTime || 60,
+          status: data.status || 'waiting'
+        });
+      }
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.LIST, "jinrou_rooms");
+  }
+  return roomsList;
 }
 
 export function subscribeToRoom(roomCode, onUpdate, onError) {
@@ -330,10 +376,10 @@ export function subscribeToRoom(roomCode, onUpdate, onError) {
         onUpdate(data);
       }
     }, (error) => {
-      console.warn("[Firebase] Firestore subscription notice:", error.message);
+      handleFirestoreError(error, OperationType.GET, `jinrou_rooms/${cleanCode}`);
     });
   } catch (err) {
-    console.warn("[Firebase] onSnapshot setup notice:", err);
+    handleFirestoreError(err, OperationType.GET, `jinrou_rooms/${cleanCode}`);
   }
 
   return () => {
@@ -349,13 +395,14 @@ export function subscribeToRoom(roomCode, onUpdate, onError) {
 }
 
 export async function leaveFirestoreRoom(roomCode, playerId) {
-  const room = getRoomLocally(roomCode);
+  const cleanCode = (roomCode || '').toString().replace(/^[#＃]/, '').trim();
+  const room = getRoomLocally(cleanCode);
   if (room && room.players) {
     delete room.players[playerId];
     if (Object.keys(room.players).length === 0) {
-      localRoomsMemory.delete(roomCode);
+      localRoomsMemory.delete(cleanCode);
       if (typeof localStorage !== "undefined") {
-        localStorage.removeItem(`jinrou_room_${roomCode}`);
+        localStorage.removeItem(`jinrou_room_${cleanCode}`);
       }
     } else {
       if (room.hostId === playerId) {
@@ -370,7 +417,7 @@ export async function leaveFirestoreRoom(roomCode, playerId) {
 
   // Call Express API
   try {
-    fetch(`/api/jinrou/rooms/${roomCode}/leave`, {
+    fetch(`/api/jinrou/rooms/${cleanCode}/leave`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ playerId })
@@ -379,14 +426,14 @@ export async function leaveFirestoreRoom(roomCode, playerId) {
 
   // Call Firestore
   try {
-    const roomRef = doc(db, "jinrou_rooms", roomCode);
-    const snap = await withTimeout(getDoc(roomRef), 1000);
+    const roomRef = doc(db, "jinrou_rooms", cleanCode);
+    const snap = await getDoc(roomRef);
     if (snap && snap.exists()) {
       const data = snap.data();
       const players = { ...(data.players || {}) };
       delete players[playerId];
       if (Object.keys(players).length === 0) {
-        deleteDoc(roomRef).catch(() => {});
+        await deleteDoc(roomRef);
       } else {
         let hostId = data.hostId;
         if (hostId === playerId) {
@@ -395,10 +442,10 @@ export async function leaveFirestoreRoom(roomCode, playerId) {
           players[hostId].isHost = true;
           players[hostId].isLeader = true;
         }
-        updateDoc(roomRef, { hostId, players }).catch(() => {});
+        await updateDoc(roomRef, { hostId, players });
       }
     }
   } catch (err) {
-    // Non-blocking
+    handleFirestoreError(err, OperationType.WRITE, `jinrou_rooms/${cleanCode}`);
   }
 }
