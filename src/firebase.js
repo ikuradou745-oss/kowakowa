@@ -14,7 +14,7 @@ import {
 
 // Web app's Firebase configuration provided by user
 const firebaseConfig = {
-  apiKey: "AIzaSyDqhonMCcb-Rx1mLm66v0y7vxmzxeaXoBE",
+  apiKey: (typeof process !== "undefined" && process.env?.FIREBASE_API_KEY) || "AIzaSyDqhonMCcb-Rx1mLm66v0y7vxmzxeaXoBE",
   authDomain: "rpgs-fa193.firebaseapp.com",
   projectId: "rpgs-fa193",
   storageBucket: "rpgs-fa193.firebasestorage.app",
